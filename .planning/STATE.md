@@ -3,7 +3,7 @@
 See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Core value:** 从多个中国新闻信源自动、确定性地采集当日新闻
-**Current focus:** 项目初始化
+**Current focus:** 基础采集与优化（Phase 1&2 合并）
 
 ## Status
 

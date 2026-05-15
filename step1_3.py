@@ -92,53 +92,6 @@ def fetch_title(html):
     return ""
 
 
-def fetch_date_from_page(html, url=""):
-    """从页面 HTML 提取发布日期"""
-    patterns = [
-        r'<meta[^>]+name=["\']PubDate["\'][^>]+content=["\']([^"\']+)["\']',
-        r'<meta[^>]+name=["\']publishdate["\'][^>]+content=["\']([^"\']+)["\']',
-        r'<span[^>]*>(\d{4}年\d{1,2}月\d{1,2}日)</span>',
-        r'<span[^>]*class=["\'][^"\']*time[^"\']*["\'][^>]*>(\d{4}-\d{2}-\d{2})',
-        r'"pubDate"\s*:\s*"([^"]+)"',
-    ]
-    for pat in patterns:
-        m = re.search(pat, html, re.IGNORECASE)
-        if m:
-            raw = m.group(1).strip()
-            for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y年%m月%d日"]:
-                try:
-                    return datetime.datetime.strptime(raw[:fmt.count('%') * 2 + 4], fmt).date()
-                except ValueError:
-                    continue
-            m2 = re.search(r'(\d{4})-(\d{2})-(\d{2})', raw)
-            if m2:
-                return datetime.date(int(m2.group(1)), int(m2.group(2)), int(m2.group(3)))
-    return None
-
-
-def check_date_in_url(url, today):
-    """检查 URL 中是否含今日日期（兜底：URL 日期匹配即通过）"""
-    patterns = [
-        today.strftime("%Y-%m-%d"),
-        today.strftime("%Y/%m/%d"),
-        today.strftime("%Y%m%d"),
-        today.strftime("%Y%m/%d"),
-    ]
-    for p in patterns:
-        if p in url:
-            return True
-    return False
-
-
-def http_200(url):
-    """单个 URL HTTP 检查"""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        return urllib.request.urlopen(req, timeout=10, context=ssl_ctx).getcode() == 200
-    except Exception:
-        return False
-
-
 async def http_200_async(session, url):
     """异步 HTTP 检查"""
     try:
@@ -365,83 +318,8 @@ def fetch_rmrb(today):
 # 三淘汰验证 + aiohttp 并发
 # ============================================================
 
-def _check_title_date_match(item, html, today):
-    """检查标题和日期是否匹配，返回 (通过?, 失败原因)"""
-    h1 = fetch_title(html)
-    page_date = fetch_date_from_page(html, item["url"])
-    date_ok = (page_date == today) or check_date_in_url(item["url"], today)
-    title_ok = h1 and any(kw in h1 for kw in item["title"][:10].split("|")[0].split()[:3] if len(kw) > 1)
-    if title_ok and date_ok:
-        return True, ""
-    reason = []
-    if not title_ok:
-        reason.append(f"h1不匹配({h1[:30] if h1 else '无h1'})")
-    if not date_ok:
-        reason.append(f"日期不符({page_date})")
-    return False, " | ".join(reason) or "未知"
-
-
-async def _fetch_and_check(session, item, today):
-    """并发获取 URL 并检查标题/日期"""
-    try:
-        async with session.get(item["url"], timeout=aiohttp.ClientTimeout(total=12), ssl=ssl_ctx) as r:
-            if r.status != 200:
-                return "fail", {"item": item, "reason": "HTTP非200"}
-            html = await r.text()
-    except Exception as e:
-        return "fail", {"item": item, "reason": f"HTTP异常: {e}"}
-
-    ok, reason = _check_title_date_match(item, html, today)
-    if ok:
-        return "pass", item
-    return "fail", {"item": item, "reason": reason}
-
-
-async def verify_static_source(name, items, today):
-    """对静态源用 aiohttp 并发获取 + 标题/日期检查"""
-    if not items:
-        return [], [], []
-
-    connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit=30)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = [_fetch_and_check(session, it, today) for it in items]
-        results = await asyncio.gather(*tasks)
-
-    passed, failed = [], []
-    for status, data in results:
-        if status == "pass":
-            passed.append(data)
-        else:
-            failed.append(data)
-
-    return passed, failed, []
-
-
-def verify_js_source(items, today):
-    """对 JS 渲染源逐条 chromium 验证（央视系）"""
-    if not items:
-        return [], [], []
-
-    passed, failed = [], []
-    for item in items:
-        try:
-            html = chromium_dom(item["url"], timeout=40, budget=25000)
-            if not html or len(html) < 500:
-                failed.append({"item": item, "reason": "chromium 返回空或过短"})
-                continue
-            ok, reason = _check_title_date_match(item, html, today)
-            if ok:
-                passed.append(item)
-            else:
-                failed.append({"item": item, "reason": reason})
-        except Exception as e:
-            failed.append({"item": item, "reason": f"验证异常: {e}"})
-
-    return passed, failed, []
-
-
-async def verify_api_source(items, today):
-    """对 API 信源只验 HTTP 200（API 已提供结构化数据，无需 h1/日期验证）"""
+async def verify_http(items, today):
+    """通用 HTTP 200 验证（Python 不编造 URL，仅确认页面可达）"""
     if not items:
         return [], [], []
 
@@ -456,31 +334,6 @@ async def verify_api_source(items, today):
             passed.append(item)
         else:
             failed.append({"item": item, "reason": "HTTP非200"})
-
-    return passed, failed, []
-
-
-def verify_cnnc_source(items, today):
-    """中核集团: 用 chromium 验证（CF 保护需要浏览器级访问）"""
-    if not items:
-        return [], [], []
-
-    passed, failed = [], []
-    for item in items:
-        try:
-            html = chromium_dom(item["url"], timeout=40, budget=25000)
-            if not html or len(html) < 500:
-                failed.append({"item": item, "reason": "chromium 返回空或过短"})
-                continue
-            url_has_date = any(p in item["url"] for p in [
-                today.strftime("%Y%m%d"), today.strftime("%Y-%m-%d"),
-            ])
-            if url_has_date:
-                passed.append(item)
-            else:
-                failed.append({"item": item, "reason": "日期不匹配"})
-        except Exception as e:
-            failed.append({"item": item, "reason": f"验证异常: {e}"})
 
     return passed, failed, []
 
@@ -504,12 +357,7 @@ def write_0(today, entries, dry_run):
         tool = entry.get("tool", "")
 
         if not passed and total > 0:
-            # 所有条目都被过滤（通常是日期不匹配）
-            all_date_filtered = all("日期" in f.get("reason", "") for f in failed)
-            if all_date_filtered:
-                status = "✅通过（今日无可用文章）"
-            else:
-                status = "❌失败"
+            status = "❌失败"
         elif total > 1 or (total == 1 and passed):
             status = "✅通过"
         else:
@@ -547,15 +395,15 @@ def write_0(today, entries, dry_run):
 # 主流程
 # ============================================================
 
-# 7信源定义: (名称, fetcher, 工具名, 验证方式, multi_return)
+# 7信源定义: (名称, fetcher, 工具名)
 SOURCES = [
-    ("新华社",    fetch_xinhuanet,    "chromium --dump-dom news.cn", "static", False),
-    ("参考消息",  fetch_ckxx,         "urllib JSON API",              "api",   False),
-    ("央视新闻",  fetch_cctv_news,    "chromium --dump-dom cctv",     "js",    False),
-    ("央视军事",  fetch_cctv_military,"chromium --dump-dom military", "js",    False),
-    ("中科院",    fetch_cas,          "urllib cas.cn",                "static", False),
-    ("中核集团",  fetch_cnnc,         "降级链",                       "cnnc",   True),
-    ("人民日报",  fetch_rmrb,         "urllib 版面索引",              "static", False),
+    ("新华社",    fetch_xinhuanet,    "chromium --dump-dom news.cn"),
+    ("参考消息",  fetch_ckxx,         "urllib JSON API"),
+    ("央视新闻",  fetch_cctv_news,    "chromium --dump-dom cctv"),
+    ("央视军事",  fetch_cctv_military,"chromium --dump-dom military"),
+    ("中科院",    fetch_cas,          "urllib cas.cn"),
+    ("中核集团",  fetch_cnnc,         "降级链"),
+    ("人民日报",  fetch_rmrb,         "urllib 版面索引"),
 ]
 
 def main():
@@ -567,12 +415,12 @@ def main():
 
     all_entries = []
 
-    for i, (name, fetcher, tool, verify_type, multi_return) in enumerate(SOURCES, 1):
+    for i, (name, fetcher, tool) in enumerate(SOURCES, 1):
         print(f"[{i}/7] {name}...", end=" ", flush=True)
 
         try:
             # ① 采集
-            if multi_return:
+            if name == "中核集团":
                 items, tool = fetcher(today)
             else:
                 items = fetcher(today)
@@ -586,15 +434,8 @@ def main():
 
             print(f"→ {len(items)}条")
 
-            # ② 三淘汰验证
-            if verify_type == "js":
-                passed, failed, _ = verify_js_source(items, today)
-            elif verify_type == "api":
-                passed, failed, _ = asyncio.run(verify_api_source(items, today))
-            elif verify_type == "cnnc":
-                passed, failed, _ = verify_cnnc_source(items, today)
-            else:
-                passed, failed, _ = asyncio.run(verify_static_source(name, items, today))
+            # ② 仅 HTTP 200 验证（Python 不编造 URL）
+            passed, failed, _ = asyncio.run(verify_http(items, today))
 
             print(f"    ✅{len(passed)} / ❌{len(failed)}")
 
@@ -618,8 +459,6 @@ def main():
         f = len(entry["failed"])
         if p > 0:
             print(f"  ✅ {entry['source']}: {p}条通过")
-        elif f > 0 and all("日期" in r.get("reason", "") for r in entry["failed"]):
-            print(f"  ✅ {entry['source']}: 工具通（今日无新稿）")
         elif p == 0 and f > 0:
             print(f"  ⚠ {entry['source']}: {p}条通过, {f}条淘汰")
         else:
