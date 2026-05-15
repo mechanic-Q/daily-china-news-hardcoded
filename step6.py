@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Step 6: 正文提取 — 从 1新闻_链接.md 提取正文，生成 2新闻_已审核.md
-支持多策略提取和信源分流（urllib/chromium）
+Step 6: 正文提取 — 从 1新闻_链接.md 提取正文，输出 2新闻_已审核.md
+5 层策略链，静态源 urllib / 央视系 chromium 分流
 
 用法:
     python3 step6.py                      # 处理今天
@@ -23,6 +23,9 @@ ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
+EXCLUDE_PARAS = ['copyright', 'icp', '京ICP', '沪ICP', '登录', '注册',
+                 '央视网', '二维码', '责编', '责任编辑', '温馨提示']
+
 
 def parse_args():
     dry = "--dry-run" in sys.argv
@@ -41,33 +44,29 @@ def parse_args():
     return dt, dry
 
 
-def chromium_dom(url, timeout=35, budget=20000):
+def chromium_dom(url, timeout=45, budget=30000):
     r = subprocess.run(
         [CHROMIUM, "--headless=new", "--disable-gpu",
          f"--virtual-time-budget={budget}", "--dump-dom", url],
-        capture_output=True, text=True, timeout=timeout
-    )
+        capture_output=True, text=True, timeout=timeout)
     return r.stdout
 
 
 def fetch_html_static(url):
-    """urllib 获取页面 HTML"""
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     return urllib.request.urlopen(req, timeout=12, context=ssl_ctx).read().decode("utf-8", errors="replace")
 
 
 def extract_body(html, url):
-    """多策略正文提取"""
+    """5 层策略链正文提取"""
 
-    # 策略1: TRS_Editor（人民日报、中科院、部分新华社）
     m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html, re.I | re.S)
     if m:
         text = re.sub(r'<[^>]+>', '', m.group(1))
         text = re.sub(r'\s+', ' ', text).strip()
         if len(text) > 100:
-            return text[:2000]
+            return text
 
-    # 策略2: article 或常见内容容器
     for pat in [
         r'<article[^>]*>(.*?)</article>',
         r'<div[^>]*class=["\']article-content["\'][^>]*>(.*?)</div>',
@@ -80,9 +79,8 @@ def extract_body(html, url):
             text = re.sub(r'<[^>]+>', '', m.group(1))
             text = re.sub(r'\s+', ' ', text).strip()
             if len(text) > 100:
-                return text[:2000]
+                return text
 
-    # 策略3: 参考消息关键词定位（正文不在 <p> 标签中）
     if 'ckxxapp' in url or 'cankaoxiaoxi' in url:
         for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京']:
             idx = html.find(kw)
@@ -92,40 +90,36 @@ def extract_body(html, url):
                 text = re.sub(r'<[^>]+>', ' ', snippet)
                 text = re.sub(r'\s+', ' ', text).strip()
                 if len(text) > 200:
-                    return text[:2000]
+                    return text
 
-    # 策略4: 通用 <p> 标签兜底
     paras = re.findall(r'<p[^>]*>(.*?)</p>', html, re.I | re.S)
-    valid = [re.sub(r'<[^>]+>', '', p).strip() for p in paras
-             if len(re.sub(r'<[^>]+>', '', p).strip()) > 20]
+    valid = []
+    for p in paras:
+        t = re.sub(r'<[^>]+>', '', p).strip()
+        if len(t) > 20 and not any(k in t.lower() for k in EXCLUDE_PARAS):
+            valid.append(t)
     if valid:
-        return ' '.join(valid)[:2000]
+        return ' '.join(valid)
 
     return None
 
 
 def needs_chromium(url):
-    """判断是否需要 chromium 渲染"""
-    return any(k in url for k in [
-        'cctv.com', 'military.cctv', 'cnnc.com.cn', 'news.cctv'])
+    return any(k in url for k in ['cctv.com', 'military.cctv', 'cnnc.com.cn', 'news.cctv'])
 
 
 def fetch_and_extract(url, title):
-    """获取 URL 并提取正文"""
     try:
         if needs_chromium(url):
-            html = chromium_dom(url, timeout=40, budget=30000)
+            html = chromium_dom(url)
         else:
             html = fetch_html_static(url)
-
         if not html or len(html) < 500:
             return None, "页面过短或为空"
-
         body = extract_body(html, url)
         if body:
             return body, None
         return None, "未找到正文区域"
-
     except Exception as e:
         return None, str(e)
 
@@ -170,8 +164,7 @@ def run(today, dry_run):
 
     if dry_run:
         print(f"\n═══ 预览: {output_path} ═══")
-        preview = "\n".join(lines)
-        print(preview[:2000])
+        print("\n".join(lines)[:2000])
     else:
         output_path.write_text("\n".join(lines), encoding="utf-8")
         print(f"\n✅ 已写入: {output_path}")
