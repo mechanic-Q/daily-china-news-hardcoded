@@ -19,13 +19,8 @@
 
 ### Active
 
-- [ ] 保存代码到 git 仓库
-- [ ] 注册远程仓库并推送
-- [ ] Phase 2：性能优化与 bug 修复
-- [ ] Phase 3：分类筛选
-- [ ] Phase 4：正文提取
-- [ ] Phase 5：摘要生成
-- [ ] Phase 6：报纸渲染
+- [ ] Phase 4：摘要生成（step7.py — MiniMax M2.7 API）
+- [ ] Phase 5：报纸渲染（JSON / HTML / PNG）
 
 ### Out of Scope
 

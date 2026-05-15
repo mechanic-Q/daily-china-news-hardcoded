@@ -13,12 +13,21 @@
 
 ### Phase 2: 分类筛选
 **Goal:** 按8栏目分类 + 涉华过滤
-**Status:** pending
+**Status:** complete
+**Success Criteria:**
+1. 8栏目分类（世界性科研突破/农业/扶贫/能源/医疗/科技/材料/军事）
+2. 涉华过滤
+3. 每栏目取最高优先级 1 条，补满至 10-16 条
+4. 新闻质量排除列表过滤非新闻内容
 
 ### Phase 3: 正文提取
 **Goal:** 从 URL 提取正文
-**Status:** pending
+**Status:** complete
+**Success Criteria:**
+1. 5 层策略链（TRS_Editor / 通用容器 / 参考消息关键词 / P标签 / chromium）
+2. 信源分流（静态 urllib / 央视系 chromium）
+3. 正文无上限保留
 
-### Phase 4: 报纸渲染
-**Goal:** JSON 生成 + HTML 渲染 + PNG 截图
-**Status:** pending
+### Phase 4: 摘要生成
+**Goal:** LLM API 逐条摘要 → 3新闻_概述.md
+**Status:** complete

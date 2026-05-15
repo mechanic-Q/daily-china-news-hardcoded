@@ -18,7 +18,8 @@
 
 ### 正文与渲染
 - [ ] **BODY-01**: 正文提取（Phase 3）
-- [ ] **REND-01**: 报纸渲染（Phase 4）
+- [x] **SUM-01**: LLM API 逐条摘要（Phase 4）
+- [ ] **REND-01**: 报纸渲染（Phase 5）
 
 ## Traceability
 
@@ -29,7 +30,8 @@
 | COL-03 | Phase 1 | Complete |
 | PERF-01 | Phase 1 | Complete |
 | PERF-02 | Phase 1 | Complete |
-| FLTR-01 | Phase 2 | Pending |
-| FLTR-02 | Phase 2 | Pending |
-| BODY-01 | Phase 3 | Pending |
-| REND-01 | Phase 4 | Pending |
+| FLTR-01 | Phase 2 | Complete |
+| FLTR-02 | Phase 2 | Complete |
+| BODY-01 | Phase 3 | Complete |
+| SUM-01 | Phase 4 | Complete |
+| REND-01 | Phase 5 | Pending |
