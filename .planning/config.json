@@ -4,11 +4,22 @@
   "parallelization": true,
   "commit_docs": true,
   "model_profile": "inherit",
+  "branching_strategy": "phase",
   "workflow": {
     "research": false,
     "plan_check": false,
     "verifier": true,
     "nyquist_validation": false,
     "auto_advance": true
+  },
+  "ship": {
+    "pr_body_sections": [
+      {
+        "heading": "User Stories & Acceptance Criteria",
+        "enabled": true,
+        "source": "REQUIREMENTS.md ## v1 Requirements",
+        "fallback": "- Acceptance criteria covered by the linked requirements and verification evidence."
+      }
+    ]
   }
 }
