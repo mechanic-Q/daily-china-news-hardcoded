@@ -1,9 +1,9 @@
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-15)
+See: `.planning/PROJECT.md` (updated 2026-05-16)
 
 **Core value:** 从多个中国新闻信源自动、确定性地采集当日新闻
-**Current focus:** 基础采集与优化（Phase 1&2 合并）
+**Current focus:** 摘要生成（Phase 4）
 
 ## Status
 
@@ -11,16 +11,16 @@ active
 
 ## Last Activity
 
-2026-05-15: 项目初始化完成
+2026-05-16: Phase 4 完成 — 摘要生成 (step7.py, MiniMax M2.7 API, 13/13 UAT)
 
 ## Current Position
 
-Phase: 1（基础采集）— 代码已交付，待走 GSD 流程确认
-Next: Phase 2（性能优化与 bug 修复）
+Phase: 4（摘要生成）— UAT 13/13 全通过, 步已交付
+Next: Phase 5（报纸渲染）— JSON 生成 + HTML 渲染 + PNG 截图
 
 ## Key Decisions
 
 - Python 3: 已有代码全部 Python
-- chromium --dump-dom: JS 源采集
-- aiohttp 并发: 静态源验证
+- MiniMax M2.7: 摘要生成 LLM API（OpenAI SDK 兼容）
+- .env + dotenv: API key 管理（非硬编码）
 - 7 信源: 已验证稳定

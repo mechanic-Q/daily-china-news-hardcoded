@@ -30,17 +30,4 @@
 
 ### Phase 4: 摘要生成
 **Goal:** LLM API 逐条摘要 → 3新闻_概述.md
-**Status:** in-progress
-**Plans:** 2 plans
-**Success Criteria:**
-1. MiniMax M2.7 API 逐条摘要 10-16 条精选新闻
-2. 输出 3新闻_概述.md 格式与原 skill Step 7 一致
-3. API 失败时规则截取回退
-
-Plans:
-- [ ] 04-01-PLAN.md — 验证 Test 9 + UAT 闭合 + Phase 4 关闭
-- [ ] 04-02-PLAN.md — 5 项非阻塞健壮性改进（可选）
-
-### Phase 5: 报纸渲染
-**Goal:** JSON 生成 + HTML 渲染 + PNG 截图
-**Status:** pending
+**Status:** complete
