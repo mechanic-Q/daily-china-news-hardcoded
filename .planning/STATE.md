@@ -11,11 +11,11 @@ active
 
 ## Last Activity
 
-2026-05-16: Phase 4 完成 — 摘要生成 (step7.py, MiniMax M2.7 API, 13/13 UAT)
+2026-05-16: Phase 4 shipped — PR #1 created
 
 ## Current Position
 
-Phase: 4（摘要生成）— UAT 13/13 全通过, 步已交付
+Phase: 4 shipped — PR #1 open (https://github.com/mechanic-Q/daily-china-news-hardcoded/pull/1)
 Next: Phase 5（报纸渲染）— JSON 生成 + HTML 渲染 + PNG 截图
 
 ## Key Decisions
