@@ -11,12 +11,11 @@ active
 
 ## Last Activity
 
-2026-05-17: Phase 5 context gathered — 6 decisions captured
+2026-05-17: Phase 5 executed — step8.py + run_all.sh (2/2 plans)
 
 ## Current Position
 
-Phase: 5（报纸渲染）— Context gathered, ready for planning
-Next: Phase 5 规划（/gsd-plan-phase 5）
+Phase: 5（报纸渲染）— Complete. step8.py 可产出 HTML+PNG，run_all.sh 可串联全管道
 
 ## Key Decisions
 
