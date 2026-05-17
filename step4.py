@@ -77,7 +77,7 @@ def is_china_source(url):
 
 
 def llm_is_china_related(title):
-    import os, time
+    import os
     api_key = os.environ.get("MINIMAX_API_KEY")
     if not api_key:
         return False
@@ -90,7 +90,7 @@ def llm_is_china_related(title):
             temperature=0.1, max_tokens=10, timeout=15,
         )
         answer = resp.choices[0].message.content.strip()
-        return answer == "是"
+        return answer.startswith("是")
     except Exception:
         return False
 
