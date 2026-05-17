@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # run_all.sh — 全管道串联
-# 用法: ./run_all.sh --date YYYY-MM-DD [--dry-run]
+# 用法: ./run_all.sh [--date YYYY-MM-DD] [--dry-run]
+#       无 --date 则默认今天
 
 set -euo pipefail
 
@@ -19,16 +20,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "错误: 未知参数: $1" >&2
-            echo "用法: $0 --date YYYY-MM-DD [--dry-run]" >&2
+            echo "用法: $0 [--date YYYY-MM-DD] [--dry-run]" >&2
             exit 1
             ;;
     esac
 done
 
 if [[ -z "$DATE" ]]; then
-    echo "错误: --date YYYY-MM-DD 为必填参数" >&2
-    echo "用法: $0 --date YYYY-MM-DD [--dry-run]" >&2
-    exit 1
+    DATE=$(date +%Y-%m-%d)
+    echo "未指定日期，默认使用今天: $DATE"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

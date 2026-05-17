@@ -47,12 +47,21 @@ def parse_md(md_path):
         print(f"❌ 文件不存在: {md_path}")
         return None
     content = md_path.read_text("utf-8")
+    title_line = None
     sections = []
     current_heading = None
     current_title = None
     current_summary = []
 
     for line in content.splitlines():
+        if title_line is None:
+            m = re.match(r'^#\s+(.+)', line)
+            if m:
+                title_line = m.group(1).strip()
+                continue
+            if line.strip() and not line.startswith('#'):
+                title_line = line.strip()
+                continue
         m = re.match(r'^##\s+(.+)', line)
         if m:
             if current_title and current_summary:
@@ -92,7 +101,7 @@ def parse_md(md_path):
                 "summary": summary_text,
             })
 
-    return sections
+    return title_line, sections
 
 
 def _chinese_ordinal(n):
@@ -150,7 +159,22 @@ def esc(text):
     return html.escape(str(text), quote=True)
 
 
+def generate_summary(sections):
+    key_points = []
+    source_re = re.compile(r'^【[^】]+】\s*')
+    for s in sections[:8]:
+        text = source_re.sub('', s["summary"]).strip()
+        parts = re.split(r'[。；\n]', text)
+        first = parts[0].strip()
+        if first and len(first) > 10:
+            key_points.append(first)
+    if not key_points:
+        return "本日新闻概述"
+    return "；".join(key_points[:6]) + "。"
+
+
 def build_html(target_date, sections, left_sections, right_sections):
+    summary_text = generate_summary(sections)
     issue = _compute_issue(target_date)
     date_text = f"{target_date.year}年{target_date.month}月{target_date.day}日 {_format_weekday(target_date)}"
 
@@ -181,7 +205,7 @@ def build_html(target_date, sections, left_sections, right_sections):
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>紫音简报</title>
+  <title>每日新中国</title>
   <style>
     :root {{
       --paper: #f6f1e6;
@@ -214,6 +238,7 @@ def build_html(target_date, sections, left_sections, right_sections):
       padding: 8px 0 5px;
       margin-bottom: 8px;
     }}
+    .topbar-left {{ display: flex; flex-direction: column; gap: 2px; }}
     .paper-title {{
       font-size: 52px;
       font-weight: 900;
@@ -221,10 +246,25 @@ def build_html(target_date, sections, left_sections, right_sections):
       line-height: 1;
       color: var(--ink);
     }}
+    .paper-tagline {{
+      font-size: 30px;
+      font-weight: 700;
+      color: #c0392b;
+      line-height: 1.2;
+    }}
     .issue-date {{
       font-size: 18px;
       color: var(--muted);
       white-space: nowrap;
+    }}
+    .summary {{
+      background: #eee8dc;
+      border-left: 8px solid var(--accent);
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      font-size: 22px;
+      line-height: 1.6;
+      color: var(--muted);
     }}
     .story-wrap {{
       display: grid;
@@ -304,9 +344,14 @@ def build_html(target_date, sections, left_sections, right_sections):
 <body>
   <article class="page">
     <header class="topbar">
-      <div class="paper-title">紫音简报</div>
-      <div class="issue-date">{esc(date_text)} — {esc(issue)}</div>
+      <div class="topbar-left">
+        <div class="paper-title">每日新中国</div>
+        <div class="paper-tagline">中国很大 我想去看看</div>
+      </div>
+      <div class="issue-date">{esc(date_text)} {esc(issue)}</div>
     </header>
+
+    <div class="summary">{esc(summary_text)}</div>
 
     <div class="story-wrap">
       {story_main_html}
@@ -382,16 +427,18 @@ def screenshot_and_crop(html_path, png_path):
 
 def run(today, dry_run):
     today_str = today.strftime("%Y-%m-%d")
+    issue = _compute_issue(today)
     input_path = BASE_DIR / today_str / "3新闻_概述.md"
-    html_path = BASE_DIR / today_str / "4新闻_报纸.html"
-    png_path = BASE_DIR / today_str / "4新闻_报纸.png"
+    html_path = BASE_DIR / today_str / f"{today_str}_每日新中国_{issue}.html"
+    png_path = BASE_DIR / today_str / f"{today_str}_每日新中国_{issue}.png"
 
     print(f"═══ Step 8: 报纸渲染 ═══")
     print(f"日期: {today_str}\n")
 
-    sections = parse_md(input_path)
-    if sections is None:
+    parsed = parse_md(input_path)
+    if parsed is None:
         return
+    title_line, sections = parsed
 
     print(f"解析到 {len(sections)} 条新闻")
     for s in sections:
