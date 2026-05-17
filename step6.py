@@ -10,6 +10,7 @@ Step 6: 正文提取 — 从 1新闻_链接.md 提取正文，输出 2新闻_已
 """
 
 import datetime
+import html
 import re
 import ssl
 import subprocess
@@ -57,8 +58,15 @@ def fetch_html_static(url):
     return urllib.request.urlopen(req, timeout=12, context=ssl_ctx).read().decode("utf-8", errors="replace")
 
 
+def _preprocess_html(html):
+    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.I | re.S)
+    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.I | re.S)
+    return html
+
+
 def extract_body(html, url):
     """5 层策略链正文提取"""
+    html = _preprocess_html(html)
 
     m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html, re.I | re.S)
     if m:
