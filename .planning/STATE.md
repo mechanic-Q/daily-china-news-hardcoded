@@ -11,7 +11,7 @@ active
 
 ## Last Activity
 
-2026-05-17: Phase 6 executed — 正文提取修复 (5 tasks, 8/10 E2E passed)
+2026-05-17: Phase 6 shipped — PR #3 merged (正文提取修复, 9/10 E2E)
 
 ## Current Position
 
@@ -24,3 +24,4 @@ Phase 6 complete — 正文提取修复（8/10 E2E passed, all quality checks �
 - .env + dotenv: API key 管理（非硬编码）
 - 7 信源: 已验证稳定
 - 保持平面脚本结构（不重构为包）
+- **分支策略（自Phase 6起）**: 每个 phase 的 discuss 阶段开头创建 feature 分支 `phase-NN-name`，所有 plan/execute/verify 的 commits 在该分支上进行，ship 时 push + gh pr create → merge
