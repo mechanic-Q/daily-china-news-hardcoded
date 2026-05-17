@@ -142,6 +142,21 @@ def _postprocess_text(text):
     ]
     for pat in ui_pats:
         text = re.sub(pat, '', text, flags=re.S)
+    # R-1: Strip people.com.cn metadata tail (enpproperty 及之前的时间戳/记者信息)
+    text = re.sub(
+        r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d+.*?(?:/enpproperty-->|$)',
+        '', text, flags=re.S
+    )
+    # R-2: Strip CAS footer (地址/邮编/电话)
+    text = re.sub(
+        r'[。，；]?\s*地址：.*?(?:邮编：\s*\d+.*?)?\s*电话：.*$',
+        '', text, flags=re.S
+    )
+    # R-2b: Strip CAS generic institution header — 从贯彻落实到"首页 > 成果转化 > 工作动态"导航
+    text = re.sub(
+        r'中国科学院贯彻落实党中央.*?首页\s*>\s*成果转化\s*>\s*工作动态\s*',
+        '', text, flags=re.S
+    )
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'\s{2,}', ' ', text).strip()
     parts = re.split(r'(?<=[。；])', text)
@@ -166,6 +181,13 @@ def _is_contaminated(text):
     if all(kw in text for kw in nav_kws):
         positions = [text.index(kw) for kw in nav_kws]
         if max(positions) - min(positions) < 100:
+            return True
+    if 'enpproperty-->' in text:
+        return True
+    if '地址：' in text and '邮编：' in text:
+        addr_idx = text.index('地址：')
+        zip_idx = text.index('邮编：')
+        if abs(zip_idx - addr_idx) < 200:
             return True
     return False
 

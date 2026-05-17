@@ -25,6 +25,75 @@ EXCLUDE_TITLES = [
     '演唱会', '直播', '网红', '选秀', '真人秀',
 ]
 
+EXCLUDE_NEGATIVE = [
+    '审查调查', '违纪违法', '纪律审查', '监察调查', '落马', '双开',
+    '接受审查', '涉嫌严重',
+]
+
+CHINA_KEYWORDS = [
+    '习近平', '总书记',
+    '中国', '我国', '国产', '中华', '中方', '在华', '访华', '驻华', '对华', '涉华',
+    '中央', '纪委', '监委', '国务院',
+    '全国政协', '全国人大', '十四届',
+    '商务部', '外交部', '国防部', '工信部', '公安部',
+    '解放军', '武警',
+    '中美', '中俄', '中非', '中日', '中欧', '中法', '中德', '中英', '中韩',
+    '中越', '中澳', '中巴', '中阿', '两岸',
+    '北京', '上海', '深圳', '广东', '浙江', '江苏', '山东', '四川', '河南',
+    '湖北', '湖南', '河北', '福建', '安徽', '辽宁', '陕西', '云南', '贵州',
+    '广西', '山西', '吉林', '黑龙江', '江西', '重庆', '天津',
+    '内蒙古', '新疆', '甘肃', '海南', '宁夏', '青海', '西藏',
+    '香港', '澳门',
+    '南海', '台海',
+    '神舟', '天宫', '嫦娥', '长征', '北斗',
+    '南水北调', '一带一路', '大湾区',
+    '乡村振兴', '扶贫', '脱贫', '共同富裕',
+    '中科院', '工程院',
+    '十五五', '十四五',
+    '两会',
+]
+
+CHINA_DOMAINS = [
+    'xinhuanet.com', 'news.cn', 'people.com.cn', 'cctv.com',
+    'chinanews.com', 'china.com.cn', 'ce.cn', 'cnr.cn',
+    'gmw.cn', 'youth.cn', 'cas.cn',
+    'cnnpn.cn', 'cnnc.com',
+    'ckxxapp.ckxx.net', 'cankaoxiaoxi.com',
+]
+
+
+def is_china_related(title):
+    for kw in CHINA_KEYWORDS:
+        if kw in title:
+            return True
+    return False
+
+
+def is_china_source(url):
+    for domain in CHINA_DOMAINS:
+        if domain in url:
+            return True
+    return False
+
+
+def llm_is_china_related(title):
+    import os
+    api_key = os.environ.get("MINIMAX_API_KEY")
+    if not api_key:
+        return False
+    try:
+        from openai import OpenAI
+        client = OpenAI(base_url="https://api.minimax.chat/v1", api_key=api_key)
+        resp = client.chat.completions.create(
+            model="minimax-m2.7",
+            messages=[{"role": "user", "content": f"判断以下新闻标题内容主体上是否直接与中国相关（报道或讨论中国事务/中国人/中国企业/中国政府/中美关系等）。只回答\"是\"或\"否\"。\n\n标题：{title}"}],
+            temperature=0.1, max_tokens=10, timeout=15,
+        )
+        answer = resp.choices[0].message.content.strip()
+        return answer.startswith("是")
+    except Exception:
+        return False
+
 
 def parse_args():
     dry = "--dry-run" in sys.argv
@@ -61,8 +130,11 @@ def parse_0(path, today):
 
 
 def is_quality_news(title):
-    """新闻质量过滤：排除非新闻内容"""
+    """新闻质量过滤：排除非新闻内容 + 负面新闻"""
     for kw in EXCLUDE_TITLES:
+        if kw in title:
+            return False
+    for kw in EXCLUDE_NEGATIVE:
         if kw in title:
             return False
     return True
@@ -70,7 +142,7 @@ def is_quality_news(title):
 
 def classify(title):
     h = title
-    if any(k in h for k in ['扶贫', '脱贫', '乡村振兴', '驻村书记', '对口帮扶', '消费扶贫', '新就业形态']):
+    if any(k in h for k in ['扶贫', '脱贫', '对口帮扶', '消费扶贫', '驻村书记', '精准扶贫', '易地搬迁']):
         return '🤝 扶贫'
     if any(k in h for k in ['肿瘤', '手术', '疫苗', '医保', '药品监管', '健康中国', '治病', '中药',
                             '脂肪肝', '肝病', '冠心病', '生物标志物', '健康管理', '医疗']):
@@ -143,6 +215,23 @@ def run(today, dry_run):
     total = len(articles)
     articles = [a for a in articles if is_quality_news(a["title"])]
     quality_removed = total - len(articles)
+
+    # 涉华过滤：关键词 → 来源检测 → LLM回退
+    china_pass = []
+    china_llm = []
+    for a in articles:
+        if is_china_related(a["title"]):
+            china_pass.append(a)
+        elif is_china_source(a["url"]):
+            china_llm.append(a)
+    # LLM 确认来源是中国但关键词未命中的
+    llm_confirmed = []
+    for a in china_llm:
+        if llm_is_china_related(a["title"]):
+            llm_confirmed.append(a)
+    china_removed = len(articles) - len(china_pass) - len(llm_confirmed)
+    articles = china_pass + llm_confirmed
+    quality_removed += china_removed
     print(f"原始: {total}条  质量过滤: 移除{quality_removed}条  → {len(articles)}条\n")
 
     col_order = [
