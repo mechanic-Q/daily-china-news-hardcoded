@@ -129,6 +129,11 @@ def _format_weekday(d):
     return WEEKDAYS[d.weekday()]
 
 
+def _estimate_weight(group):
+    items = group.get("items", [])
+    return sum(len(item.get("title", "")) + len(item.get("summary", "")) for item in items)
+
+
 def balance_columns(sections):
     groups = {}
     for sec in sections:
@@ -136,21 +141,38 @@ def balance_columns(sections):
 
     ordered = []
     for heading, items in groups.items():
-        chars = sum(len(s["heading"]) + len(s["title"]) + len(s["summary"]) for s in items)
-        ordered.append({"heading": heading, "items": items, "chars": chars})
+        weight = _estimate_weight({"heading": heading, "items": items})
+        ordered.append({"heading": heading, "items": items, "weight": weight})
+
+    n = len(ordered)
+    if n == 0:
+        return [], []
+    if n == 1:
+        return [ordered[0]], []
+
+    best_mask = 0
+    best_diff = float("inf")
+
+    for mask in range(1 << n):
+        left_weight = 0
+        right_weight = 0
+        for i in range(n):
+            if mask & (1 << i):
+                right_weight += ordered[i]["weight"]
+            else:
+                left_weight += ordered[i]["weight"]
+        diff = abs(left_weight - right_weight)
+        if diff < best_diff:
+            best_diff = diff
+            best_mask = mask
 
     left = []
     right = []
-    left_chars = 0
-    right_chars = 0
-
-    for group in ordered:
-        if left_chars <= right_chars:
-            left.append(group)
-            left_chars += group["chars"]
+    for i in range(n):
+        if best_mask & (1 << i):
+            right.append(ordered[i])
         else:
-            right.append(group)
-            right_chars += group["chars"]
+            left.append(ordered[i])
 
     return left, right
 
