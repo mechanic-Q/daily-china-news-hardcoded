@@ -31,3 +31,12 @@
 ### Phase 4: 摘要生成
 **Goal:** LLM API 逐条摘要 → 3新闻_概述.md
 **Status:** complete
+
+### Phase 5: 报纸渲染
+**Goal:** 从 3新闻_概述.md 生成可视化报纸 PNG (step8.py + run_all.sh)
+**Status:** complete
+**Requirements:** REND-01
+**UAT:** 10/10 passed
+Plans:
+- [x] 05-01-PLAN.md — step8.py 全流程 (MD→HTML→PNG)
+- [x] 05-02-PLAN.md — run_all.sh 全管道串联
