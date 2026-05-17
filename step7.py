@@ -116,13 +116,25 @@ def fallback_summarize(title, body):
     return lead + '。'
 
 
+COT_LEAK_PATTERNS = [
+    '用户要求我', '让我分析', '我需要确保', 'Potential answer', 'The user wants',
+    'I need to', '核心要点应该', '用1-2句话', '直接输出摘要',
+    '让我总结', '关键在于', '主要信息', '关键点', 'core points',
+]
+
+
 def is_valid_summary(summary, body):
     if len(summary) < 20:
+        return False
+    if len(summary) > 200:
         return False
     if summary in body:
         return False
     if len(summary) < len(body) * 0.02 and len(summary) < 30:
         return False
+    for pat in COT_LEAK_PATTERNS:
+        if pat in summary:
+            return False
     return True
 
 
