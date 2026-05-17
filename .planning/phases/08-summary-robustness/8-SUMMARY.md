@@ -9,17 +9,19 @@
 
 | Function | File | Change |
 |----------|------|--------|
-| `is_quality_news()` | step4.py | 增加 EXCLUDE_NEGATIVE 检查 + is_china_related() 涉华检测 |
-| `is_china_related(title)` | step4.py | 新增 — 去噪后检查 CHINA_KEYWORDS 是否涉华 |
+| `is_quality_news()` | step4.py | 增加 EXCLUDE_NEGATIVE 检查 |
+| `is_china_related(title)` | step4.py | 新增 — 80+ CHINA_KEYWORDS 涉华检测 |
+| `is_china_source(url)` | step4.py | 新增 — 中国官方信源域名白名单 |
+| `llm_is_china_related(title)` | step4.py | 新增 — LLM二次确认（D-01双重过滤） |
 | `classify()` 扶贫关键词 | step4.py | 去掉"乡村振兴"/"新就业形态"，新增"精准扶贫"/"易地搬迁" |
-| `is_valid_summary(summary, body)` | step7.py | 新增 — 检测长度/截断/原文片段 |
-| `llm_summarize()` | step7.py | 精简 prompt + 无效摘要触发回退 |
+| `llm_summarize()` | step7.py | 精简prompt + is_valid_summary检测 + 回退 |
+| `is_valid_summary(summary, body)` | step7.py | 新增 — 长度/截断/原文片段检测 |
 
 ### E2E results (2026-05-17 data)
 
-- ✅ step4: 194条→52条→5条精选（纯外国/负面已过滤，扶贫无泛匹配）
-- ✅ step7: 摘要83字/2句话，无截断
-- ✅ step8: HTML+PNG 正常生成
+- ✅ step4: 194条→103条移除→91条→10条精选
+- ✅ step7: 4/5 API成功，摘要精简（64-117字）
+- ✅ step8: HTML+PNG 正常生成（5栏目，左右平衡）
 
 ### Requirements covered
 
