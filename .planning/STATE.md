@@ -3,7 +3,7 @@
 See: `.planning/PROJECT.md` (updated 2026-05-16)
 
 **Core value:** 从多个中国新闻信源自动、确定性地采集当日新闻
-**Current focus:** v1.1 Quality Fix — 正文提取乱码修复 + 左右栏平衡改进
+**Current focus:** v1.1 Quality Fix — 正文提取乱码修复 + 左右栏平衡 + 摘要健壮性
 
 ## Status
 
