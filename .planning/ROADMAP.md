@@ -34,9 +34,9 @@
 
 ### Phase 5: 报纸渲染
 **Goal:** 从 3新闻_概述.md 生成可视化报纸 PNG (step8.py + run_all.sh)
-**Status:** in-progress
+**Status:** complete
 **Requirements:** REND-01
-**Plans:** 2 plans
+**UAT:** 10/10 passed
 Plans:
-- [ ] 05-01-PLAN.md — step8.py 全流程 (MD→HTML→PNG)
-- [ ] 05-02-PLAN.md — run_all.sh 全管道串联
+- [x] 05-01-PLAN.md — step8.py 全流程 (MD→HTML→PNG)
+- [x] 05-02-PLAN.md — run_all.sh 全管道串联
