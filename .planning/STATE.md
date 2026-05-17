@@ -11,11 +11,12 @@ active
 
 ## Last Activity
 
+2026-05-17: Phase 7 execution complete — 左右栏平衡改进 (1 plan, 3 tasks, E2E passed)
 2026-05-17: Phase 6 shipped — PR #3 merged (正文提取修复, 9/10 E2E)
 
 ## Current Position
 
-Phase 7 context gathered — 左右栏平衡改进（3 decisions locked），待plan
+Phase 7 execution complete — 左右栏平衡改进（视觉权重穷举），待verify/ship
 
 ## Key Decisions
 
