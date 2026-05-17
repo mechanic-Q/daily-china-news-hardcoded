@@ -131,7 +131,7 @@ def _format_weekday(d):
 
 def _estimate_weight(group):
     items = group.get("items", [])
-    return 4.5 + sum(1.2 + (len(item.get("title", "")) + len(item.get("summary", ""))) / 90 for item in items)
+    return sum(len(item.get("title", "")) + len(item.get("summary", "")) for item in items)
 
 
 def balance_columns(sections):

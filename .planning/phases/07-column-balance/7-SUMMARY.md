@@ -11,15 +11,15 @@
 
 | Function | Change |
 |----------|--------|
-| `_estimate_weight(group)` | 新增 — 视觉权重估算：`4.5 + Σ(1.2 + text_len/90 per item)` |
+| `_estimate_weight(group)` | 新增 — 纯字数权重：`Σ(title_len + summary_len)` |
 | `balance_columns(sections)` | 重写 — 穷举 2^8=256 种分配方案，选差值最小的 |
 
 ### E2E results (2026-05-17 data)
 
 - ✅ HTML 正常生成
-- ✅ PNG 正常生成并裁白边
-- ✅ 左右栏权重差 4.7（总权重 47.9，约 10%）
+- ✅ 左右栏字数差 44 字（左栏 544，右栏 588），约 8%
 - ✅ 输出格式不变
+- ⚠️ `_estimate_weight` 最初使用 `4.5 + Σ(1.2 + text_len/90)` 固定开销公式，经 Phase 7 UAT 发现左右栏视觉不平衡（权重差 0.2 但字数差 152 字），于 2026-05-17 简化为纯字数
 
 ### Requirements covered
 
