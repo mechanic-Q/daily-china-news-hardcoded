@@ -116,6 +116,16 @@ def fallback_summarize(title, body):
     return lead + '。'
 
 
+def is_valid_summary(summary, body):
+    if len(summary) < 20:
+        return False
+    if summary in body:
+        return False
+    if len(summary) < len(body) * 0.02 and len(summary) < 30:
+        return False
+    return True
+
+
 def llm_summarize(title, body):
     """调用 MiniMax M2.7 API 摘要（含 1 次重试）"""
     api_key = os.environ.get("MINIMAX_API_KEY")
@@ -131,7 +141,7 @@ def llm_summarize(title, body):
                 base_url="https://api.minimax.chat/v1",
                 api_key=api_key,
             )
-            prompt = f"""用2-3句中文概括以下新闻。直接输出摘要，不要输出思考过程。
+            prompt = f"""用1-2句话精炼概括以下新闻的核心要点。简短、准确、完整，直接输出摘要。
 
 标题：{title}
 正文：{body}"""
@@ -146,6 +156,8 @@ def llm_summarize(title, body):
             raw = resp.choices[0].message.content.strip()
             if raw:
                 cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+                if cleaned and not is_valid_summary(cleaned, body):
+                    return None
                 return cleaned if cleaned else None
             return None
         except Exception as e:

@@ -25,6 +25,23 @@ EXCLUDE_TITLES = [
     '演唱会', '直播', '网红', '选秀', '真人秀',
 ]
 
+EXCLUDE_NEGATIVE = [
+    '审查调查', '违纪违法', '纪律审查', '监察调查', '落马', '双开',
+    '接受审查', '涉嫌严重',
+]
+
+CHINA_KEYWORDS = [
+    '中国', '我国', '国产', '中华', '中方', '在华', '访华', '驻华', '对华', '涉华',
+    '山东', '浙江', '江苏', '广东', '北京', '上海', '深圳', '四川', '河南', '湖北', '湖南',
+    '中央', '纪委', '监委', '十四届', '全国政协', '全国人大', '国务院',
+    '乡村振兴', '扶贫',
+]
+
+
+def is_china_related(title):
+    clean = title.replace('新华社', '').replace('参考消息', '').replace('央视', '').replace('人民', '')
+    return any(kw in clean for kw in CHINA_KEYWORDS)
+
 
 def parse_args():
     dry = "--dry-run" in sys.argv
@@ -61,16 +78,21 @@ def parse_0(path, today):
 
 
 def is_quality_news(title):
-    """新闻质量过滤：排除非新闻内容"""
+    """新闻质量过滤：排除非新闻内容 + 负面新闻 + 涉华检测"""
     for kw in EXCLUDE_TITLES:
         if kw in title:
             return False
+    for kw in EXCLUDE_NEGATIVE:
+        if kw in title:
+            return False
+    if not is_china_related(title):
+        return False
     return True
 
 
 def classify(title):
     h = title
-    if any(k in h for k in ['扶贫', '脱贫', '乡村振兴', '驻村书记', '对口帮扶', '消费扶贫', '新就业形态']):
+    if any(k in h for k in ['扶贫', '脱贫', '对口帮扶', '消费扶贫', '驻村书记', '精准扶贫', '易地搬迁']):
         return '🤝 扶贫'
     if any(k in h for k in ['肿瘤', '手术', '疫苗', '医保', '药品监管', '健康中国', '治病', '中药',
                             '脂肪肝', '肝病', '冠心病', '生物标志物', '健康管理', '医疗']):
