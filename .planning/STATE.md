@@ -11,15 +11,15 @@ active
 
 ## Last Activity
 
+2026-05-18: Phase 8 shipped — PR #5 merged (过滤摘要健壮性, UAT 10/10)
 2026-05-17: Phase 8 execution complete — 过滤摘要健壮性 (step4+step7, E2E passed)
 2026-05-17: Phase 7 shipped — PR #4 merged (纯字数权重, WGT-01修复, UAT 5/5)
 2026-05-17: Phase 6 shipped — PR #3 merged (正文提取修复, 9/10 E2E)
 
 ## Current Position
 
-Phase 8 execution complete — 过滤摘要健壮性 (step4+step7)
-Phase 7 shipped — PR #4 merged
-Phase 8 UAT pending
+Phase 8 shipped — PR #5 merged (过滤摘要健壮性, UAT 10/10)
+Phase 9 pending — 智能分类 (C+D混合)
 
 ## Key Decisions
 
