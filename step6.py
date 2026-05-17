@@ -81,6 +81,7 @@ def extract_body(html, url):
         r'<div[^>]*class=["\']content["\'][^>]*>(.*?)</div>',
         r'<div[^>]*class=["\']detail["\'][^>]*>(.*?)</div>',
         r'<div[^>]*class=["\']main-content["\'][^>]*>(.*?)</div>',
+        r'<div[^>]*id=["\']ozoom["\'][^>]*>(.*?)</div>',
     ]:
         m = re.search(pat, html, re.I | re.S)
         if m:
