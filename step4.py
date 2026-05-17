@@ -140,44 +140,113 @@ def is_quality_news(title):
     return True
 
 
-def classify(title):
-    h = title
-    if any(k in h for k in ['扶贫', '脱贫', '对口帮扶', '消费扶贫', '驻村书记', '精准扶贫', '易地搬迁']):
-        return '🤝 扶贫'
-    if any(k in h for k in ['肿瘤', '手术', '疫苗', '医保', '药品监管', '健康中国', '治病', '中药',
-                            '脂肪肝', '肝病', '冠心病', '生物标志物', '健康管理', '医疗']):
-        return '🏥 医疗'
-    if any(k in h for k in ['武器', '军演', '国防', '反恐', '海军', '航母', '战机', '军队',
-                            '军营', '官兵', '军事']):
-        return '🎖️ 军事'
-    if any(k in h for k in ['石油', '原油', '油价', '核能', '光伏', '风电', '氢能', '人造太阳',
-                            '核电', '能源', '电力', '电力装机', '燃料']):
-        return '⚡ 能源'
-    if any(k in h for k in ['玉米', '春播', '农机', '种业', '耕地', '畜牧', '春耕', '育秧',
-                            '小麦', '治沙', '农业', '农村', '粮食', '农产品', '农田']):
-        return '🌾 农业'
-    if any(k in h for k in ['钢铁', '化工', '稀土', '矿产', '新材料', '重工', '造船']):
-        return '🧱 材料'
-    if any(k in h for k in ['机器人', 'AI', '人工智能', '无人机', '专利', '智能', '科技',
-                            '中关村', '科创', '数字', '数据', '算力', '创新', '生产线']):
-        return '🚀 科技'
-    if any(k in h for k in ['重编程', 'p53', '诺贝尔', '干细胞', 'iPS', '化学小分子', '考古',
-                            '发现', '基因', '宇宙', '航天', '火箭', '卫星', '探测', '世界首次',
-                            '嫦娥', '天宫', '量子', '火星', '月球']):
-        return '🔬 世界性科研突破'
-    if '自主创新' in h or '攻坚克难' in h:
-        return '🚀 科技'
-    return None
+CATEGORY_KEYWORDS = {
+    '🔬 世界性科研突破': {
+        '诺贝尔': 5, '世界首次': 5, '全球首次': 5, '首次发现': 5,
+        '基因': 4, '量子': 4, '干细胞': 4, 'iPS': 4, '重编程': 4,
+        'p53': 4, '化学小分子': 4, '考古发现': 4,
+        '航天': 3, '卫星': 3, '探测': 3, '嫦娥': 3, '天宫': 3,
+        '火星': 3, '月球': 3, '宇宙': 3,
+    },
+    '🌾 农业': {
+        '农业': 3, '粮食': 3, '农产品': 3, '农田': 3,
+        '玉米': 2, '小麦': 2, '春播': 2, '春耕': 2, '育秧': 2,
+        '农机': 2, '种业': 2, '耕地': 2, '畜牧': 2,
+        '治沙': 2, '农村': 1,
+    },
+    '🤝 扶贫': {
+        '精准扶贫': 5, '易地搬迁': 4, '扶贫': 4, '脱贫': 4,
+        '对口帮扶': 3, '消费扶贫': 3, '驻村书记': 3,
+    },
+    '⚡ 能源': {
+        '核电': 4, '核能': 4, '人造太阳': 4,
+        '光伏': 3, '风电': 3, '氢能': 3, '能源': 3,
+        '电力': 2, '石油': 2, '原油': 2, '油价': 2, '燃料': 2,
+    },
+    '🏥 医疗': {
+        '医疗': 3, '疫苗': 3, '肿瘤': 3, '手术': 3, '医保': 3,
+        '药品监管': 3, '健康管理': 2, '中药': 2, '健康中国': 2,
+    },
+    '🚀 科技': {
+        '人工智能': 3, 'AI': 3, '机器人': 3, '无人机': 3,
+        '算力': 3, '科创': 2, '数字': 2, '数据': 2, '智能': 2,
+        '科技': 2, '创新': 1, '生产线': 1,
+    },
+    '🧱 材料': {
+        '新材料': 4, '稀土': 3, '钢铁': 3, '化工': 3,
+        '矿产': 3, '重工': 2, '造船': 2,
+    },
+    '🎖️ 军事': {
+        '火箭炮': 4, '导弹': 4, '航母': 4, '战机': 4, '军演': 4,
+        '军区': 3, '军事': 3, '军队': 3, '海军': 3, '国防': 3,
+        '官兵': 2, '训练': 2,
+    },
+}
 
 
-def priority_score(title):
+def score_all_categories(title):
+    scores = {}
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        s = sum(w for kw, w in keywords.items() if kw in title)
+        if s > 0:
+            scores[cat] = s
+    return scores
+
+
+def llm_classify_batch(articles, batch_size=5):
+    import os
+    from openai import OpenAI
+    api_key = os.environ.get("MINIMAX_API_KEY")
+    if not api_key:
+        return {}
+
+    cat_names = list(CATEGORY_KEYWORDS.keys())
+    results = {}
+
+    for i in range(0, len(articles), batch_size):
+        batch = articles[i:i+batch_size]
+        prompt = "将以下新闻标题归入最贴切的栏目（只能选一个）。\n"
+        prompt += "栏目：" + "、".join(cat_names) + "\n\n"
+        prompt += "输出格式（每行一条）：序号|栏目名\n\n"
+        for j, a in enumerate(batch):
+            prompt += f"{j+1}. {a['title']}\n"
+
+        try:
+            client = OpenAI(base_url="https://api.minimax.chat/v1", api_key=api_key)
+            resp = client.chat.completions.create(
+                model="minimax-m2.7",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1, max_tokens=200, timeout=30,
+            )
+            text = resp.choices[0].message.content.strip()
+            for line in text.split("\n"):
+                parts = line.strip().split("|")
+                if len(parts) == 2:
+                    try:
+                        idx = int(parts[0].strip()) - 1
+                        cat = parts[1].strip()
+                        if 0 <= idx < len(batch) and cat in CATEGORY_KEYWORDS:
+                            results[batch[idx]['title']] = cat
+                    except ValueError:
+                        pass
+        except Exception as e:
+            print(f"  ⚠ LLM分类失败: {e}")
+
+    return results
+
+
+def priority_score(title, category):
     score = 0
-    if '首条' in title or '首次' in title or '第一批' in title or '第一' in title:
-        score += 3
-    if '自主创新' in title or '攻坚克难' in title:
-        score += 2
-    if '我国' in title or '国产' in title:
-        score += 1
+    for kw, w in [('世界首次', 5), ('全球首个', 5), ('首次', 3),
+                   ('自主创新', 2), ('攻坚克难', 2), ('突破', 2),
+                   ('我国', 1), ('国产', 1)]:
+        if kw in title:
+            score += w
+    if category == '🔬 世界性科研突破':
+        has_breakthrough = any(k in title for k in
+            ['首次', '突破', '发现', '全球', '世界', '诺贝尔', '首台', '首个'])
+        if not has_breakthrough:
+            score = max(0, score - 2)
     return score
 
 
@@ -240,10 +309,40 @@ def run(today, dry_run):
     ]
     classified = {col: [] for col in col_order}
 
+    # Phase 1: 关键词评分 → 分离高置信度 / 低置信度
+    high_confidence = {}
+    low_confidence = []
+
     for a in articles:
-        cat = classify(a['title'])
+        scores = score_all_categories(a['title'])
+        if scores:
+            sorted_cats = sorted(scores.items(), key=lambda x: -x[1])
+            best_cat, best_score = sorted_cats[0]
+            second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
+            if best_score >= 3 and (best_score - second_score) >= 2:
+                high_confidence[a['title']] = best_cat
+            else:
+                low_confidence.append(a)
+        else:
+            low_confidence.append(a)
+
+    # Phase 2: LLM 批量裁决低置信度
+    llm_results = {}
+    if low_confidence:
+        print(f"  关键词高置信度: {len(high_confidence)}条, LLM裁决: {len(low_confidence)}条")
+        llm_results = llm_classify_batch(low_confidence)
+
+    # Phase 3: 合并结果，归入栏目
+    for a in articles:
+        cat = high_confidence.get(a['title'])
+        if not cat:
+            cat = llm_results.get(a['title'])
+        if not cat and score_all_categories(a['title']):
+            scores = score_all_categories(a['title'])
+            cat = max(scores, key=scores.get)
         if cat and cat in classified:
-            a['priority'] = priority_score(a['title'])
+            a['category'] = cat
+            a['priority'] = priority_score(a['title'], cat)
             classified[cat].append(a)
 
     for col in classified:
@@ -277,7 +376,7 @@ def run(today, dry_run):
     while len(selected) < 10 and remaining:
         pick = remaining.pop(0)
         if pick['url'] not in used_urls:
-            pick['column'] = classify(pick['title'])
+            pick['column'] = pick.get('category', '🚀 科技')
             selected.append(pick)
             used_urls.add(pick['url'])
 
