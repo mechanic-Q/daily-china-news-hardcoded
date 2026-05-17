@@ -92,7 +92,14 @@ def extract_body(html, url):
                 return text
 
     if 'ckxxapp' in url or 'cankaoxiaoxi' in url:
-        for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京']:
+        m = re.search(r'var contentTxt\s*=\s*"(.*)";\s*var', html, re.S)
+        if m:
+            raw = m.group(1).replace('\\"', '"').replace('\\/', '/')
+            text = re.sub(r'<[^>]+>', '', raw)
+            text = re.sub(r'\s+', ' ', text).strip()
+            if len(text) > 200:
+                return text
+        for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京', '参考消息网']:
             idx = html.find(kw)
             if idx > 0:
                 end = idx + 200
