@@ -10,6 +10,7 @@ Step 6: 正文提取 — 从 1新闻_链接.md 提取正文，输出 2新闻_已
 """
 
 import datetime
+import html
 import re
 import ssl
 import subprocess
@@ -57,10 +58,18 @@ def fetch_html_static(url):
     return urllib.request.urlopen(req, timeout=12, context=ssl_ctx).read().decode("utf-8", errors="replace")
 
 
+def _preprocess_html(html):
+    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.I | re.S)
+    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.I | re.S)
+    return html
+
+
 def extract_body(html, url):
     """5 层策略链正文提取"""
 
-    m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html, re.I | re.S)
+    # Layer 1: TRS_Editor (safe to strip script/style — content in normal HTML)
+    html_clean = _preprocess_html(html)
+    m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html_clean, re.I | re.S)
     if m:
         text = re.sub(r'<[^>]+>', '', m.group(1))
         text = re.sub(r'\s+', ' ', text).strip()
@@ -73,8 +82,9 @@ def extract_body(html, url):
         r'<div[^>]*class=["\']content["\'][^>]*>(.*?)</div>',
         r'<div[^>]*class=["\']detail["\'][^>]*>(.*?)</div>',
         r'<div[^>]*class=["\']main-content["\'][^>]*>(.*?)</div>',
+        r'<div[^>]*id=["\']ozoom["\'][^>]*>(.*?)</div>',
     ]:
-        m = re.search(pat, html, re.I | re.S)
+        m = re.search(pat, html_clean, re.I | re.S)
         if m:
             text = re.sub(r'<[^>]+>', '', m.group(1))
             text = re.sub(r'\s+', ' ', text).strip()
@@ -82,17 +92,30 @@ def extract_body(html, url):
                 return text
 
     if 'ckxxapp' in url or 'cankaoxiaoxi' in url:
-        for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京']:
+        m = re.search(r'var contentTxt\s*=\s*"(.*)";\s*var', html, re.S)
+        if m:
+            raw = m.group(1).replace('\\"', '"').replace('\\/', '/')
+            text = re.sub(r'<[^>]+>', '', raw)
+            text = re.sub(r'\s+', ' ', text).strip()
+            if len(text) > 200:
+                return text
+        for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京', '参考消息网']:
             idx = html.find(kw)
             if idx > 0:
-                end = html.find('责任编辑', idx) if '责任编辑' in html[idx:] else idx + 5000
+                end = idx + 200
+                for marker in ['责任编辑', '";', '编译/']:
+                    pos = html[idx:].find(marker)
+                    if pos > -1:
+                        cand = idx + pos + len(marker)
+                        if cand > end:
+                            end = cand
                 snippet = html[idx:end] if end > 0 else html[idx:idx + 5000]
                 text = re.sub(r'<[^>]+>', ' ', snippet)
                 text = re.sub(r'\s+', ' ', text).strip()
                 if len(text) > 200:
                     return text
 
-    paras = re.findall(r'<p[^>]*>(.*?)</p>', html, re.I | re.S)
+    paras = re.findall(r'<p[^>]*>(.*?)</p>', html_clean, re.I | re.S)
     valid = []
     for p in paras:
         t = re.sub(r'<[^>]+>', '', p).strip()
@@ -102,6 +125,58 @@ def extract_body(html, url):
         return ' '.join(valid)
 
     return None
+
+
+def _postprocess_text(text):
+    text = html.unescape(text)
+    text = re.sub(r'\[!--begin:htmlVideoCode--\].*?\[!--end:htmlVideoCode--\]', '', text, flags=re.S)
+    ui_pats = [
+        r'静音\(m\)', r'全屏\(f\)',
+        r'ADCountdown\s*(Time|时间)?', r'广告关闭广告',
+        r'正在加载[\s\S]*?视频播放器', r'播放视频播放\([pP]\)',
+        r'播放\([pP]\)', r'当前时间[\s\S]*?时长[\s\S]*?\d+:\d+',
+        r'媒体流类型[\s\S]*?高清', r'高清画质超清高清',
+        r'加载完成:\s*\d+%-?\d*:\d*',
+        r'您上次观看至[\s\S]*?已为您续播',
+        r'尊贵的用户[\s\S]*?跳过广告',
+    ]
+    for pat in ui_pats:
+        text = re.sub(pat, '', text, flags=re.S)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+    parts = re.split(r'(?<=[。；])', text)
+    deduped = []
+    for s in parts:
+        s_stripped = s.strip()
+        if s_stripped and (not deduped or s_stripped != deduped[-1].strip()):
+            deduped.append(s)
+    return ''.join(deduped)
+
+
+def _is_contaminated(text):
+    css_signals = ['font-family', 'margin:', 'padding:', 'line-height:', 'border-spacing']
+    js_signals = ['var ih =', 'var p =', 'document.getElementById', 'console.log']
+    for s in css_signals:
+        if s in text:
+            return True
+    for s in js_signals:
+        if s in text:
+            return True
+    nav_kws = ['日报', '周报', '杂志']
+    if all(kw in text for kw in nav_kws):
+        positions = [text.index(kw) for kw in nav_kws]
+        if max(positions) - min(positions) < 100:
+            return True
+    return False
+
+
+def _aggressive_clean(html, url=None):
+    if url and ('ckxxapp' in url or 'cankaoxiaoxi' in url):
+        return html
+    html = _preprocess_html(html)
+    html = re.sub(r'<!--.*?-->', '', html, flags=re.S)
+    html = re.sub(r'\sstyle="[^"]*"', '', html, flags=re.I)
+    return html
 
 
 def needs_chromium(url):
@@ -118,7 +193,16 @@ def fetch_and_extract(url, title):
             return None, "页面过短或为空"
         body = extract_body(html, url)
         if body:
-            return body, None
+            processed = _postprocess_text(body)
+            if _is_contaminated(processed):
+                cleaned_html = _aggressive_clean(html)
+                body2 = extract_body(cleaned_html, url)
+                if body2:
+                    processed2 = _postprocess_text(body2)
+                    if not _is_contaminated(processed2):
+                        return processed2, None
+                return None, "提取结果被污染"
+            return processed, None
         return None, "未找到正文区域"
     except Exception as e:
         return None, str(e)

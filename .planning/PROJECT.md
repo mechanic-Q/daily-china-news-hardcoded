@@ -24,7 +24,10 @@
 
 ### Active
 
-（暂无 — 等待下一 milestone 规划）
+- ✓ 正文提取清洗（剥JS/CSS、解码HTML实体、清理播放器标记）— v1.1
+- ✓ 提取后内容质量验证（检测污染并丢弃）— v1.1
+- ✓ 人民日报专用提取策略— v1.1
+- ✓ 左右栏视觉权重平衡 — v1.1
 
 ### Out of Scope
 
@@ -41,10 +44,14 @@ Total phases: 5, plans: 7, UAT: all passed
 Milestone timeline: 2026-05-15 → 2026-05-17 (3 days)
 Git commits: 20, files changed: 444
 
-Known tech debt:
+Known tech debt (v1.0):
 - Summary text auto-concatenated from individual article key points
 - chromium path hardcoded at `/snap/bin/chromium`
 - Chinese ordinal issue numbers in filenames
+
+Known bugs (v1.1 target):
+- 正文乱码：JS/CSS/HTML实体混入，人民日报整页抓取
+- 左右栏不平衡：纯字符贪心分配忽略视觉权重
 
 ## Constraints
 
@@ -67,4 +74,4 @@ Known tech debt:
 
 ---
 
-*Last updated: 2026-05-17 after v1.0 milestone*
+*Last updated: 2026-05-17 after v1.1 milestone planning*
