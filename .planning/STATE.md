@@ -11,11 +11,11 @@ active
 
 ## Last Activity
 
-2026-05-17: Phase 6 context gathered — 正文提取修复（4 areas discussed）
+2026-05-17: Phase 6 executed — 正文提取修复 (5 tasks, 8/10 E2E passed)
 
 ## Current Position
 
-Phase 6 context gathered — 正文提取修复（4 areas discussed），待plan+execute
+Phase 6 complete — 正文提取修复（8/10 E2E passed, all quality checks ✅），待Phase 7
 
 ## Key Decisions
 

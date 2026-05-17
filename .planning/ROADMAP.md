@@ -3,6 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-5 (shipped 2026-05-17)
+- 🚧 **v1.1 Quality Fix** — Phases 6-7 (planning 2026-05-17)
 
 ## Phases
 
@@ -17,6 +18,14 @@
 
 </details>
 
+<details open>
+<summary>🚧 v1.1 Quality Fix (Phases 6-7) — Phase 6 done 2026-05-17</summary>
+
+- [x] Phase 6: 正文提取修复 — 清理JS/CSS/HTML实体混入，改进提取策略
+- [ ] Phase 7: 左右栏平衡改进 — 视觉权重替代纯字符贪心分配
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -26,3 +35,5 @@
 | 3. 正文提取 | v1.0 | 1/1 | Complete | 2026-05-15 |
 | 4. 摘要生成 | v1.0 | 2/2 | Complete | 2026-05-16 |
 | 5. 报纸渲染 | v1.0 | 2/2 | Complete | 2026-05-17 |
+| 6. 正文提取修复 | v1.1 | 1/1 | Complete | 2026-05-17 |
+| 7. 左右栏平衡改进 | v1.1 | 0/0 | Planning | — |
