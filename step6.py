@@ -113,6 +113,32 @@ def extract_body(html, url):
     return None
 
 
+def _postprocess_text(text):
+    text = html.unescape(text)
+    text = re.sub(r'\[!--begin:htmlVideoCode--\].*?\[!--end:htmlVideoCode--\]', '', text, flags=re.S)
+    ui_pats = [
+        r'静音\(m\)', r'全屏\(f\)',
+        r'ADCountdown\s*(Time|时间)?', r'广告关闭广告',
+        r'正在加载[\s\S]*?视频播放器', r'播放视频播放\([pP]\)',
+        r'播放\([pP]\)', r'当前时间[\s\S]*?时长[\s\S]*?\d+:\d+',
+        r'媒体流类型[\s\S]*?高清', r'高清画质超清高清',
+        r'加载完成:\s*\d+%-?\d*:\d*',
+        r'您上次观看至[\s\S]*?已为您续播',
+        r'尊贵的用户[\s\S]*?跳过广告',
+    ]
+    for pat in ui_pats:
+        text = re.sub(pat, '', text, flags=re.S)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+    parts = re.split(r'(?<=[。；])', text)
+    deduped = []
+    for s in parts:
+        s_stripped = s.strip()
+        if s_stripped and (not deduped or s_stripped != deduped[-1].strip()):
+            deduped.append(s)
+    return ''.join(deduped)
+
+
 def needs_chromium(url):
     return any(k in url for k in ['cctv.com', 'military.cctv', 'cnnc.com.cn', 'news.cctv'])
 
@@ -127,7 +153,7 @@ def fetch_and_extract(url, title):
             return None, "页面过短或为空"
         body = extract_body(html, url)
         if body:
-            return body, None
+            return _postprocess_text(body), None
         return None, "未找到正文区域"
     except Exception as e:
         return None, str(e)
