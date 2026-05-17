@@ -139,6 +139,30 @@ def _postprocess_text(text):
     return ''.join(deduped)
 
 
+def _is_contaminated(text):
+    css_signals = ['font-family', 'margin:', 'padding:', 'line-height:', 'border-spacing']
+    js_signals = ['var ih =', 'var p =', 'document.getElementById', 'console.log']
+    for s in css_signals:
+        if s in text:
+            return True
+    for s in js_signals:
+        if s in text:
+            return True
+    nav_kws = ['日报', '周报', '杂志']
+    if all(kw in text for kw in nav_kws):
+        positions = [text.index(kw) for kw in nav_kws]
+        if max(positions) - min(positions) < 100:
+            return True
+    return False
+
+
+def _aggressive_clean(html):
+    html = _preprocess_html(html)
+    html = re.sub(r'<!--.*?-->', '', html, flags=re.S)
+    html = re.sub(r'\sstyle="[^"]*"', '', html, flags=re.I)
+    return html
+
+
 def needs_chromium(url):
     return any(k in url for k in ['cctv.com', 'military.cctv', 'cnnc.com.cn', 'news.cctv'])
 
@@ -153,7 +177,16 @@ def fetch_and_extract(url, title):
             return None, "页面过短或为空"
         body = extract_body(html, url)
         if body:
-            return _postprocess_text(body), None
+            processed = _postprocess_text(body)
+            if _is_contaminated(processed):
+                cleaned_html = _aggressive_clean(html)
+                body2 = extract_body(cleaned_html, url)
+                if body2:
+                    processed2 = _postprocess_text(body2)
+                    if not _is_contaminated(processed2):
+                        return processed2, None
+                return None, "提取结果被污染"
+            return processed, None
         return None, "未找到正文区域"
     except Exception as e:
         return None, str(e)
