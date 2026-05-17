@@ -15,7 +15,7 @@ active
 
 ## Current Position
 
-Phase 6 complete — 正文提取修复（8/10 E2E passed, all quality checks ✅），待Phase 7
+Phase 7 context gathered — 左右栏平衡改进（3 decisions locked），待plan
 
 ## Key Decisions
 
