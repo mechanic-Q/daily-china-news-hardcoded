@@ -66,9 +66,10 @@ def _preprocess_html(html):
 
 def extract_body(html, url):
     """5 层策略链正文提取"""
-    html = _preprocess_html(html)
 
-    m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html, re.I | re.S)
+    # Layer 1: TRS_Editor (safe to strip script/style — content in normal HTML)
+    html_clean = _preprocess_html(html)
+    m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html_clean, re.I | re.S)
     if m:
         text = re.sub(r'<[^>]+>', '', m.group(1))
         text = re.sub(r'\s+', ' ', text).strip()
@@ -83,7 +84,7 @@ def extract_body(html, url):
         r'<div[^>]*class=["\']main-content["\'][^>]*>(.*?)</div>',
         r'<div[^>]*id=["\']ozoom["\'][^>]*>(.*?)</div>',
     ]:
-        m = re.search(pat, html, re.I | re.S)
+        m = re.search(pat, html_clean, re.I | re.S)
         if m:
             text = re.sub(r'<[^>]+>', '', m.group(1))
             text = re.sub(r'\s+', ' ', text).strip()
@@ -94,14 +95,20 @@ def extract_body(html, url):
         for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京']:
             idx = html.find(kw)
             if idx > 0:
-                end = html.find('责任编辑', idx) if '责任编辑' in html[idx:] else idx + 5000
+                end = idx + 200
+                for marker in ['责任编辑', '";', '编译/']:
+                    pos = html[idx:].find(marker)
+                    if pos > -1:
+                        cand = idx + pos + len(marker)
+                        if cand > end:
+                            end = cand
                 snippet = html[idx:end] if end > 0 else html[idx:idx + 5000]
                 text = re.sub(r'<[^>]+>', ' ', snippet)
                 text = re.sub(r'\s+', ' ', text).strip()
                 if len(text) > 200:
                     return text
 
-    paras = re.findall(r'<p[^>]*>(.*?)</p>', html, re.I | re.S)
+    paras = re.findall(r'<p[^>]*>(.*?)</p>', html_clean, re.I | re.S)
     valid = []
     for p in paras:
         t = re.sub(r'<[^>]+>', '', p).strip()
@@ -156,7 +163,9 @@ def _is_contaminated(text):
     return False
 
 
-def _aggressive_clean(html):
+def _aggressive_clean(html, url=None):
+    if url and ('ckxxapp' in url or 'cankaoxiaoxi' in url):
+        return html
     html = _preprocess_html(html)
     html = re.sub(r'<!--.*?-->', '', html, flags=re.S)
     html = re.sub(r'\sstyle="[^"]*"', '', html, flags=re.I)
