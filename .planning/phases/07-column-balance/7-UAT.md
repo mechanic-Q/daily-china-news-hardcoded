@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 07-column-balance
 source: 7-SUMMARY.md
 started: 2026-05-17T12:00:00Z
-updated: 2026-05-17T12:00:00Z
+updated: 2026-05-18T00:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Visual column balance
-expected: |
-  运行 `python3 step8.py --date 2026-05-17`，左右两栏的渲染高度大致接近（无明显的高低悬殊）
-awaiting: user response
+[testing complete]
 
 ## Tests
 
