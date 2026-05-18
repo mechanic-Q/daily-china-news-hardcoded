@@ -148,12 +148,14 @@ CATEGORY_KEYWORDS = {
         '航天': 3, '卫星': 3, '探测': 3, '嫦娥': 3, '天宫': 3,
         '火星': 3, '月球': 3, '宇宙': 3, '火箭发射': 3,
         '发现': 2, '突破': 2,
+        '研究': 1, '实验': 1, '论文': 1,
     },
     '🌾 农业': {
         '农业': 3, '粮食': 3, '农产品': 3, '农田': 3,
         '玉米': 2, '小麦': 2, '春播': 2, '春耕': 2, '育秧': 2,
         '农机': 2, '种业': 2, '耕地': 2, '畜牧': 2,
         '治沙': 2, '农村': 1, '蔬菜': 1, '水果': 1,
+        '种植': 1, '养殖': 1, '渔业': 1, '生态': 1,
     },
     '🤝 扶贫': {
         '精准扶贫': 5, '易地搬迁': 4, '扶贫': 4, '脱贫': 4,
@@ -164,28 +166,33 @@ CATEGORY_KEYWORDS = {
         '光伏': 3, '风电': 3, '氢能': 3, '能源': 3,
         '电力': 2, '石油': 2, '原油': 2, '油价': 2, '燃料': 2,
         '电力装机': 2, '电网': 2, '清洁能源': 2,
+        '节能': 1, '减排': 1, '碳中和': 1, '清洁': 1,
     },
     '🏥 医疗': {
         '医疗': 3, '疫苗': 3, '肿瘤': 3, '手术': 3, '医保': 3,
         '药品监管': 3, '健康管理': 2, '中药': 2, '健康中国': 2,
         '治病': 2, '冠心病': 2, '肝病': 2, '脂肪肝': 2,
         '疾病': 1, '药物': 1, '患者': 1, '医院': 1,
+        '健康': 1, '卫生': 1,
     },
     '🚀 科技': {
         '人工智能': 3, 'AI': 3, '机器人': 3, '无人机': 3,
         '算力': 3, '科创': 2, '数字': 2, '数据': 2, '智能': 2,
         '科技': 2, '创新': 1, '生产线': 1,
         '专利': 2, '中关村': 2, '芯片': 2, '5G': 2,
+        '经济': 1, '产业': 1, '发展': 1, '建设': 1, '项目': 1,
     },
     '🧱 材料': {
         '新材料': 4, '稀土': 3, '钢铁': 3, '化工': 3,
         '矿产': 3, '重工': 2, '造船': 2,
+        '制造业': 1, '工厂': 1, '装备': 1, '设备': 1,
     },
     '🎖️ 军事': {
         '火箭炮': 4, '导弹': 4, '航母': 4, '战机': 4, '军演': 4,
         '军区': 3, '军事': 3, '军队': 3, '海军': 3, '国防': 3,
         '官兵': 2, '训练': 2,
         '武器': 2, '反恐': 2, '军营': 2, '南海': 1, '台海': 1,
+        '战略': 1, '安全': 1, '国际': 1, '关系': 1, '合作': 1,
     },
 }
 
@@ -199,44 +206,46 @@ def score_all_categories(title):
     return scores
 
 
-def llm_classify_batch(articles, batch_size=5):
-    import os
-    from openai import OpenAI
-    api_key = os.environ.get("MINIMAX_API_KEY")
+def llm_classify_single(articles):
+    """逐条用 GLM-4 Flash 分类，返回 {title: category}"""
+    import os, re
+    api_key = os.environ.get("ZHIPU_API_KEY")
     if not api_key:
         return {}
 
     cat_names = list(CATEGORY_KEYWORDS.keys())
-    results = {}
+    cat_simple = {}
+    for full in cat_names:
+        simple = re.sub(r'^[^\s]+\s', '', full).strip()
+        cat_simple[full] = full
+        cat_simple[simple] = full
 
-    for i in range(0, len(articles), batch_size):
-        batch = articles[i:i+batch_size]
-        prompt = "将以下新闻标题归入最贴切的栏目（只能选一个）。\n"
-        prompt += "栏目：" + "、".join(cat_names) + "\n\n"
-        prompt += "输出格式（每行一条）：序号|栏目名\n\n"
-        for j, a in enumerate(batch):
-            prompt += f"{j+1}. {a['title']}\n"
+    results = {}
+    from openai import OpenAI
+    client = OpenAI(base_url="https://open.bigmodel.cn/api/paas/v4/", api_key=api_key)
+
+    for a in articles:
+        prompt = f"从以下栏目中选一个最贴合的，只输出栏目名称，不要输出其他文字。\n\n栏目：科技、军事、医疗、能源、农业、科研突破、材料、扶贫\n\n标题：{a['title']}\n\n最贴合的栏目："
 
         try:
-            client = OpenAI(base_url="https://api.minimax.chat/v1", api_key=api_key)
             resp = client.chat.completions.create(
-                model="minimax-m2.7",
+                model="glm-4-flash",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1, max_tokens=200, timeout=30,
+                temperature=0, max_tokens=10, timeout=15,
             )
-            text = resp.choices[0].message.content.strip()
-            for line in text.split("\n"):
-                parts = line.strip().split("|")
-                if len(parts) == 2:
-                    try:
-                        idx = int(parts[0].strip()) - 1
-                        cat = parts[1].strip()
-                        if 0 <= idx < len(batch) and cat in CATEGORY_KEYWORDS:
-                            results[batch[idx]['title']] = cat
-                    except ValueError:
-                        pass
+            raw = resp.choices[0].message.content.strip()
+            cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+            full_cat = cat_simple.get(cleaned.strip('。，、\'"').strip())
+            if full_cat:
+                results[a['title']] = full_cat
+            else:
+                # Try stripping punctuation and re-match
+                for k, v in cat_simple.items():
+                    if k in cleaned:
+                        results[a['title']] = v
+                        break
         except Exception as e:
-            print(f"  ⚠ LLM分类失败: {e}")
+            print(f"  ⚠ LLM分类失败: {a['title'][:30]}... {e}")
 
     return results
 
@@ -325,18 +334,18 @@ def run(today, dry_run):
             sorted_cats = sorted(scores.items(), key=lambda x: -x[1])
             best_cat, best_score = sorted_cats[0]
             second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
-            if best_score >= 3 and (best_score - second_score) >= 2:
+            if best_score >= 4 and (best_score - second_score) >= 2:
                 high_confidence[a['title']] = best_cat
             else:
                 low_confidence.append(a)
         else:
             low_confidence.append(a)
 
-    # Phase 2: LLM 批量裁决低置信度
+    # Phase 2: LLM 逐条裁决低置信度
     llm_results = {}
     if low_confidence:
         print(f"  关键词高置信度: {len(high_confidence)}条, LLM裁决: {len(low_confidence)}条")
-        llm_results = llm_classify_batch(low_confidence)
+        llm_results = llm_classify_single(low_confidence)
 
     # Phase 3: 合并结果，归入栏目
     for a in articles:
