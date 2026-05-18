@@ -262,6 +262,8 @@ def priority_score(title, category):
             ['首次', '突破', '发现', '全球', '世界', '诺贝尔', '首台', '首个'])
         if not has_breakthrough:
             score = max(0, score - 2)
+    scores = score_all_categories(title)
+    score += scores.get(category, 0)
     return score
 
 
