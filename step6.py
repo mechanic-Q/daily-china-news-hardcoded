@@ -152,9 +152,10 @@ def _postprocess_text(text):
         r'[。，；]?\s*地址：.*?(?:邮编：\s*\d+.*?)?\s*电话：.*$',
         '', text, flags=re.S
     )
-    # R-2b: Strip CAS generic institution header — 从贯彻落实到"首页 > 成果转化 > 工作动态"导航
+    # R-2b: Strip CAS generic institution header — 从"贯彻落实"到"创新型大学"固定模板
+    # 不依赖面包屑，适用所有 CAS 子站页面（syky/cg/zh 等）
     text = re.sub(
-        r'中国科学院贯彻落实党中央.*?首页\s*>\s*成果转化\s*>\s*工作动态\s*',
+        r'中国科学院贯彻落实党中央.*?创新型大学。\s*',
         '', text, flags=re.S
     )
     text = re.sub(r'\n{3,}', '\n\n', text)
