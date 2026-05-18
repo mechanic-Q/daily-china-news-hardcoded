@@ -123,62 +123,73 @@ COT_LEAK_PATTERNS = [
 ]
 
 
-def is_valid_summary(summary, body):
-    if len(summary) < 20:
-        return False
+def _why_invalid(summary, body):
+    """诊断摘要失败原因，返回 None 表示有效，否则返回原因字符串"""
+    if not summary or len(summary) < 20:
+        return "too_short"
     if len(summary) > 200:
-        return False
+        return "too_long"
     if summary in body:
-        return False
+        return "body_copy"
     if len(summary) < len(body) * 0.02 and len(summary) < 30:
-        return False
+        return "too_short"
     for pat in COT_LEAK_PATTERNS:
         if pat in summary:
-            return False
-    return True
+            return "cot_leak"
+    return None
+
+
+RETRY_PROMPTS = {
+    "cot_leak": "不要输出你的思考过程或分析步骤，直接输出摘要结果。只输出结果。",
+    "too_long": "输出严格限制在1-2句话，简洁概括核心要点，不要超过100字。",
+    "body_copy": "用自己的话重新组织概括，不要直接复制原文中的句子。",
+    "too_short": "请输出完整一句话的摘要，至少包含一个完整的结论。",
+}
 
 
 def llm_summarize(title, body):
-    """调用 MiniMax M2.7 API 摘要（含 1 次重试）"""
-    api_key = os.environ.get("MINIMAX_API_KEY")
+    """调用 GLM-4 Flash API 逐条摘要（智能重试：诊断失败原因→针对性修复 prompt→重试）"""
+    import time
+    api_key = os.environ.get("ZHIPU_API_KEY")
     if not api_key:
-        print("  ⚠ MINIMAX_API_KEY 未设置，使用规则回退")
+        print("  ⚠ LLM API 密钥未设置，使用规则回退")
         return None
 
-    import time
-    for attempt in range(2):
-        try:
-            from openai import OpenAI
-            client = OpenAI(
-                base_url="https://api.minimax.chat/v1",
-                api_key=api_key,
-            )
-            prompt = f"""用1-2句话精炼概括以下新闻的核心要点。简短、准确、完整，直接输出摘要。
+    from openai import OpenAI
+    client = OpenAI(base_url="https://open.bigmodel.cn/api/paas/v4/", api_key=api_key)
+    base_prompt = f"用1-2句话精炼概括以下新闻的核心要点。简短、准确、完整，直接输出摘要。\n\n标题：{title}\n正文：{body}"
 
-标题：{title}
-正文：{body}"""
+    failures = set()
+    for attempt in range(3):
+        try:
+            prompt = base_prompt
+            if attempt > 0 and failures:
+                prompt += "\n\n" + "注意：" + " ".join(RETRY_PROMPTS.get(f, "") for f in failures)
 
             resp = client.chat.completions.create(
-                model="minimax-m2.7",
+                model="glm-4-flash",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=300,
-                timeout=30,
+                temperature=0.3, max_tokens=300, timeout=30,
             )
             raw = resp.choices[0].message.content.strip()
-            if raw:
-                cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
-                if cleaned and not is_valid_summary(cleaned, body):
-                    return None
-                return cleaned if cleaned else None
-            return None
+            if not raw:
+                continue
+            cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+            reason = _why_invalid(cleaned, body)
+            if not reason:
+                return cleaned
+            failures.add(reason)
+            if attempt < 2:
+                print(f"  ⚠ {reason}, 重试中...")
+                time.sleep(1)
         except Exception as e:
-            if attempt == 0:
-                print(f"  ⚠ API 调用失败，重试中... ({e})")
+            if attempt < 2:
+                print(f"  ⚠ API 异常: {e}, 重试中...")
                 time.sleep(2)
             else:
-                print(f"  ⚠ API 调用失败: {e}")
-                return None
+                print(f"  ⚠ API 异常: {e}")
+
+    return None
 
 
 def run(today, dry_run):

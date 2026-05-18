@@ -72,9 +72,9 @@ def parse_md(md_path):
                         "title": current_title,
                         "summary": summary_text,
                     })
-                    current_title = None
-                    current_summary = []
             current_heading = m.group(1).strip()
+            current_title = None
+            current_summary = []
             continue
         m = re.match(r'^###\s+(.+)', line)
         if m:
@@ -218,9 +218,17 @@ def build_html(target_date, sections, left_sections, right_sections):
     left_col = f'<div class="content-col col-left">\n{left_html}\n</div>' if left_html else ""
     right_col = f'<div class="content-col col-right">\n{right_html}\n</div>' if right_html else ""
 
-    story_main_html = f"""{left_col}
+    if left_html and right_html:
+        story_main_html = f"""{left_col}
       <div class="col-divider"></div>
       {right_col}"""
+        wrap_class = "story-wrap"
+    elif left_html:
+        story_main_html = f"""<div class="content-col single-col">\n{left_html}\n</div>"""
+        wrap_class = "story-wrap single-col"
+    else:
+        story_main_html = f"""<div class="content-col single-col">\n{right_html}\n</div>"""
+        wrap_class = "story-wrap single-col"
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -294,8 +302,15 @@ def build_html(target_date, sections, left_sections, right_sections):
       gap: 0;
       position: relative;
     }}
+    .story-wrap.single-col {{
+      display: block;
+    }}
     .content-col {{
       min-width: 0;
+    }}
+    .content-col.single-col {{
+      max-width: 660px;
+      margin: 0 auto;
     }}
     .col-divider {{
       background: var(--line);
@@ -375,7 +390,7 @@ def build_html(target_date, sections, left_sections, right_sections):
 
     <div class="summary">{esc(summary_text)}</div>
 
-    <div class="story-wrap">
+    <div class="{wrap_class}">
       {story_main_html}
     </div>
 
