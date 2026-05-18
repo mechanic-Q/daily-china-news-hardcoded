@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-5 (shipped 2026-05-17)
-- ✅ **v1.1 Quality Fix** — Phases 6-9 (Phases 6-9 shipped 2026-05-18)
+- ✅ **v1.1 Quality Fix** — Phases 6-9 (shipped 2026-05-18)
 
 ## Phases
 
@@ -19,7 +19,7 @@
 </details>
 
 <details>
-<summary>✅ v1.1 Quality Fix (Phases 6-9) — ALL SHIPPED 2026-05-18</summary>
+<summary>✅ v1.1 Quality Fix (Phases 6-9) — SHIPPED 2026-05-18</summary>
 
 - [x] Phase 6: 正文提取修复 — 清理JS/CSS/HTML实体混入，改进提取策略
 - [x] Phase 7: 左右栏平衡改进 — 纯字数权重穷举分配, WGT-01修复
