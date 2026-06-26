@@ -25,13 +25,13 @@ plan_level: light
 
 ### Wave 1（无依赖，可并行）
 
-- [ ] task-01: 删除 step8 顶部全局摘要栏（覆盖：FR-01, D-001@v1, D-004@v1）
-- [ ] task-02: 新增 USER_MANUAL.md 用户手册（覆盖：FR-02, FR-04, D-002@v1, D-003@v1, D-004@v1）
+- [x] task-01: 删除 step8 顶部全局摘要栏（覆盖：FR-01, D-001@v1, D-004@v1）
+- [x] task-02: 新增 USER_MANUAL.md 用户手册（覆盖：FR-02, FR-04, D-002@v1, D-003@v1, D-004@v1）
 
 ### Wave 2（依赖 Wave 1）
 
-- [ ] task-03: 验证 step8 语法与 dry-run 输出（依赖：task-01；覆盖：FR-01, FR-03, D-001@v1）
-- [ ] task-04: 验证手册覆盖范围（依赖：task-02；覆盖：FR-02, FR-04, D-002@v1, D-003@v1）
+- [x] task-03: 验证 step8 语法与 dry-run 输出（依赖：task-01；覆盖：FR-01, FR-03, D-001@v1）
+- [x] task-04: 验证手册覆盖范围（依赖：task-02；覆盖：FR-02, FR-04, D-002@v1, D-003@v1）
 
 ## 任务总表
 
