@@ -181,22 +181,7 @@ def esc(text):
     return html.escape(str(text), quote=True)
 
 
-def generate_summary(sections):
-    key_points = []
-    source_re = re.compile(r'^【[^】]+】\s*')
-    for s in sections[:8]:
-        text = source_re.sub('', s["summary"]).strip()
-        parts = re.split(r'[。；\n]', text)
-        first = parts[0].strip()
-        if first and len(first) > 10:
-            key_points.append(first)
-    if not key_points:
-        return "本日新闻概述"
-    return "；".join(key_points[:6]) + "。"
-
-
 def build_html(target_date, sections, left_sections, right_sections):
-    summary_text = generate_summary(sections)
     issue = _compute_issue(target_date)
     date_text = f"{target_date.year}年{target_date.month}月{target_date.day}日 {_format_weekday(target_date)}"
 
@@ -286,15 +271,6 @@ def build_html(target_date, sections, left_sections, right_sections):
       font-size: 18px;
       color: var(--muted);
       white-space: nowrap;
-    }}
-    .summary {{
-      background: #eee8dc;
-      border-left: 8px solid var(--accent);
-      padding: 10px 16px;
-      margin-bottom: 14px;
-      font-size: 22px;
-      line-height: 1.6;
-      color: var(--muted);
     }}
     .story-wrap {{
       display: grid;
@@ -387,8 +363,6 @@ def build_html(target_date, sections, left_sections, right_sections):
       </div>
       <div class="issue-date">{esc(date_text)} {esc(issue)}</div>
     </header>
-
-    <div class="summary">{esc(summary_text)}</div>
 
     <div class="{wrap_class}">
       {story_main_html}
