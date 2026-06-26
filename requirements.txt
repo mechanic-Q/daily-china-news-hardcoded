@@ -1,0 +1,13 @@
+# Daily 项目 Python 依赖
+# author: lmr
+# created_at: 2026-06-24
+#
+# 外部依赖（非 pip）：
+# - Chromium headless: /snap/bin/chromium (apt: chromium-browser 或 snap install chromium)
+# - Python: 3.12+
+
+openai>=1.0          # OpenAI SDK（兼容 Zhipu/MiniMax/9router 等 base_url 协议）
+aiohttp>=3.9         # step1_3.py 异步 HTTP-200 校验
+Pillow>=10.0         # step8.py 截图后底部空白裁剪
+python-dotenv>=1.0   # .env 文件加载
+PyYAML>=6.0          # llm.yaml 解析（新增依赖，本次变更引入）
