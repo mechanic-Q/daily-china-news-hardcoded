@@ -1,0 +1,271 @@
+schema_version: 1
+project: Daily
+source_commit: 5f76a1a
+generated_at: 2026-06-26 22:30:00
+generator: sillyspec-scan
+author: lmr
+
+# Daily 项目是一个 5 步 Python 新闻流水线，每个 step 脚本即一个模块。
+# 模块间通过文件接力（md 文件），无内存共享，无 import 关系。
+# depends_on 表达的是"数据流依赖"，不是 Python import 依赖。
+
+modules:
+  llm-client:
+    status: active
+    doc: modules/llm-client.md
+    paths:
+      - llm_client.py
+      - llm.yaml
+    tags:
+      - llm
+      - config
+      - yaml
+      - openai
+    aliases:
+      - llm 配置
+      - LLM 统一管理
+    entrypoints:
+      - "from llm_client import load_config, get_client, call_llm"
+    main_symbols:
+      - load_config
+      - get_client
+      - call_llm
+      - ConfigError
+      - LLMCallError
+    depends_on: []
+    used_by:
+      - classifier
+      - summarizer
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  collector:
+    status: active
+    doc: modules/collector.md
+    paths:
+      - step1_3.py
+    tags:
+      - fetch
+      - 采集
+      - http
+      - chromium
+      - aiohttp
+      - sources
+      - xinhua
+      - cctv
+      - rss
+      - validator
+    aliases:
+      - step1
+      - step1_3
+      - 采集器
+      - fetcher
+      - 信源
+    entrypoints:
+      - "python3 step1_3.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - SOURCES
+      - BASE_DIR
+      - chromium_dom
+      - http_200_async
+      - fetch_xinhuanet
+      - fetch_ckxx
+      - fetch_cctv_news
+      - fetch_cctv_military
+      - fetch_cas
+      - fetch_cnnc
+      - fetch_rmrb
+      - fetch_title
+    depends_on: []
+    used_by:
+      - classifier
+    needs_review: false
+    concerns:
+      - "信源 URL 硬编码"
+      - "cnnc 三级回退之外无重试机制"
+    review_reasons: []
+
+  classifier:
+    status: active
+    doc: modules/classifier.md
+    paths:
+      - step4.py
+    tags:
+      - classify
+      - filter
+      - 分类
+      - 过滤
+      - keyword
+      - llm
+      - glm-4-flash
+      - minimax
+      - 8 栏目
+      - 涉华
+    aliases:
+      - step4
+      - 分类器
+      - 过滤器
+      - 栏目分配
+    entrypoints:
+      - "python3 step4.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - CATEGORY_KEYWORDS
+      - CHINA_KEYWORDS
+      - CHINA_DOMAINS
+      - EXCLUDE_TITLES
+      - EXCLUDE_NEGATIVE
+      - is_china_related
+      - is_china_source
+      - llm_is_china_related
+      - llm_classify_single
+      - parse_0
+      - score_article
+    depends_on:
+      - collector
+    used_by:
+      - extractor
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  extractor:
+    status: active
+    doc: modules/extractor.md
+    paths:
+      - step6.py
+    tags:
+      - body
+      - extract
+      - 正文提取
+      - regex
+      - chromium
+      - 5-layer
+    aliases:
+      - step6
+      - 正文提取器
+      - body extractor
+    entrypoints:
+      - "python3 step6.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - EXCLUDE_PARAS
+      - chromium_dom
+      - fetch_html_static
+      - extract_body
+      - _preprocess_html
+      - _postprocess_text
+      - _is_contaminated
+      - needs_chromium
+    depends_on:
+      - classifier
+    used_by:
+      - summarizer
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  summarizer:
+    status: active
+    doc: modules/summarizer.md
+    paths:
+      - step7.py
+    tags:
+      - summarize
+      - llm
+      - 摘要
+      - glm-4-flash
+      - retry
+      - cot-leak
+      - zhipu
+    aliases:
+      - step7
+      - 摘要器
+      - summarizer
+    entrypoints:
+      - "python3 step7.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - COLUMN_ORDER
+      - COT_LEAK_PATTERNS
+      - RETRY_PROMPTS
+      - parse_1news
+      - parse_2news
+      - fallback_summarize
+      - _why_invalid
+      - llm_summarize
+    depends_on:
+      - extractor
+    used_by:
+      - renderer
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  renderer:
+    status: active
+    doc: modules/renderer.md
+    paths:
+      - step8.py
+    tags:
+      - render
+      - html
+      - png
+      - chromium
+      - screenshot
+      - css-grid
+      - pillow
+      - 双栏
+      - newspaper
+    aliases:
+      - step8
+      - 报纸渲染
+      - newspaper renderer
+    entrypoints:
+      - "python3 step8.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - COLUMN_ORDER
+      - WEEKDAYS
+      - parse_md
+      - _chinese_ordinal
+      - _compute_issue
+      - _format_weekday
+      - balance_columns
+      - _estimate_weight
+    depends_on:
+      - summarizer
+    used_by:
+      - orchestrator
+    needs_review: false
+    concerns:
+      - "🟡 balance_columns O(2^n) 暴力枚举"
+    review_reasons: []
+
+  orchestrator:
+    status: active
+    doc: modules/orchestrator.md
+    paths:
+      - run_all.sh
+    tags:
+      - orchestration
+      - shell
+      - bash
+      - pipeline
+    aliases:
+      - run_all
+      - 编排
+      - 主入口
+    entrypoints:
+      - "./run_all.sh [--date YYYY-MM-DD] [--dry-run]"
+    main_symbols:
+      - STEPS
+      - DATE
+      - DRY_RUN
+    depends_on:
+      - collector
+      - classifier
+      - extractor
+      - summarizer
+      - renderer
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []

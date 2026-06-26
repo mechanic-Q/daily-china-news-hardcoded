@@ -1,0 +1,40 @@
+# SillySpec 本地配置（自动生成，可手动修改）
+# author: lmr
+# created_at: 2026-06-24 18:05:00
+
+project:
+  type: generic  # nodejs/maven/gradle/generic
+
+# Daily 是 Python 3.12 新闻流水线项目，无标准构建工具
+# 主要命令是直接调用脚本
+commands:
+  build: ""                                    # 无需构建
+  test: ""                                     # 无自动化测试
+  lint: ""                                     # 无 linter 配置
+  run: "./run_all.sh"                          # 完整管道
+  run_step: "python3 stepN.py --date YYYY-MM-DD"  # 单步运行（仅文档参考）
+
+# 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试
+test_strategy: skip                            # 无测试
+
+# 环境变量（必须从 .env 加载或 shell export）
+env:
+  required:
+    - ZHIPU_API_KEY   # GLM-4 Flash (分类 + 摘要)
+    - MINIMAX_API_KEY # 涉华过滤回退
+  source: ".env"      # .env 文件位置（gitignored）
+
+# 外部工具依赖
+external_tools:
+  chromium: "/snap/bin/chromium"  # JS 渲染 + 截图
+
+# 输出根目录（硬编码在所有 step 脚本中）
+output_dir: "/mnt/e/每日新中国"
+
+# 模块测试路径映射（暂无单元测试）
+# module_paths:
+#   collect: "step1_3.py"
+#   classify: "step4.py"
+#   extract: "step6.py"
+#   summarize: "step7.py"
+#   render: "step8.py"

@@ -148,16 +148,12 @@ RETRY_PROMPTS = {
 
 
 def llm_summarize(title, body):
-    """调用 GLM-4 Flash API 逐条摘要（智能重试：诊断失败原因→针对性修复 prompt→重试）"""
+    """调用 LLM 逐条摘要（智能重试：诊断失败原因→针对性修复 prompt→重试）。
+    失败返回 None，上游用 fallback_summarize 兜底。"""
     import time
-    api_key = os.environ.get("ZHIPU_API_KEY")
-    if not api_key:
-        print("  ⚠ LLM API 密钥未设置，使用规则回退")
-        return None
+    from llm_client import call_llm, LLMCallError
 
-    from openai import OpenAI
-    client = OpenAI(base_url="https://open.bigmodel.cn/api/paas/v4/", api_key=api_key)
-    base_prompt = f"用1-2句话精炼概括以下新闻的核心要点。简短、准确、完整，直接输出摘要。\n\n标题：{title}\n正文：{body}"
+    base_prompt = f"用1-2句话精炼概括以下新闻的核心要点。全文控制在200字以内。简短、准确、完整，直接输出摘要。\n\n标题：{title}\n正文：{body}"
 
     failures = set()
     for attempt in range(3):
@@ -166,12 +162,7 @@ def llm_summarize(title, body):
             if attempt > 0 and failures:
                 prompt += "\n\n" + "注意：" + " ".join(RETRY_PROMPTS.get(f, "") for f in failures)
 
-            resp = client.chat.completions.create(
-                model="glm-4-flash",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=300, timeout=30,
-            )
-            raw = resp.choices[0].message.content.strip()
+            raw = call_llm("summarize", messages=[{"role": "user", "content": prompt}])
             if not raw:
                 continue
             cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
@@ -183,12 +174,13 @@ def llm_summarize(title, body):
                 print(f"  ⚠ {reason}, 重试中...")
                 time.sleep(1)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             if attempt < 2:
                 print(f"  ⚠ API 异常: {e}, 重试中...")
                 time.sleep(2)
             else:
                 print(f"  ⚠ API 异常: {e}")
-
     return None
 
 

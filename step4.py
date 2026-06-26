@@ -14,6 +14,8 @@ import re
 import sys
 from pathlib import Path
 
+from llm_client import call_llm, LLMCallError
+
 BASE_DIR = Path("/mnt/e/每日新中国")
 
 EXCLUDE_TITLES = [
@@ -77,21 +79,17 @@ def is_china_source(url):
 
 
 def llm_is_china_related(title):
-    import os
-    api_key = os.environ.get("MINIMAX_API_KEY")
-    if not api_key:
-        return False
+    """LLM 涉华兜底判定，失败时返回 False（保留现有 fallback 语义）。"""
     try:
-        from openai import OpenAI
-        client = OpenAI(base_url="https://api.minimax.chat/v1", api_key=api_key)
-        resp = client.chat.completions.create(
-            model="minimax-m2.7",
+        from llm_client import call_llm
+        ans = call_llm(
+            "china-relevance",
             messages=[{"role": "user", "content": f"判断以下新闻标题内容主体上是否直接与中国相关（报道或讨论中国事务/中国人/中国企业/中国政府/中美关系等）。只回答\"是\"或\"否\"。\n\n标题：{title}"}],
-            temperature=0.1, max_tokens=10, timeout=15,
         )
-        answer = resp.choices[0].message.content.strip()
-        return answer.startswith("是")
+        return ans.strip().startswith("是")
     except Exception:
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -207,11 +205,9 @@ def score_all_categories(title):
 
 
 def llm_classify_single(articles):
-    """逐条用 GLM-4 Flash 分类，返回 {title: category}"""
-    import os, re
-    api_key = os.environ.get("ZHIPU_API_KEY")
-    if not api_key:
-        return {}
+    """逐条用 LLM 分类，返回 {title: category}。失败的条目不进 results。"""
+    import re
+    from llm_client import call_llm
 
     cat_names = list(CATEGORY_KEYWORDS.keys())
     cat_simple = {}
@@ -221,32 +217,25 @@ def llm_classify_single(articles):
         cat_simple[simple] = full
 
     results = {}
-    from openai import OpenAI
-    client = OpenAI(base_url="https://open.bigmodel.cn/api/paas/v4/", api_key=api_key)
-
     for a in articles:
         prompt = f"从以下栏目中选一个最贴合的，只输出栏目名称，不要输出其他文字。\n\n栏目：科技、军事、医疗、能源、农业、科研突破、材料、扶贫\n\n标题：{a['title']}\n\n最贴合的栏目："
 
         try:
-            resp = client.chat.completions.create(
-                model="glm-4-flash",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0, max_tokens=10, timeout=15,
-            )
-            raw = resp.choices[0].message.content.strip()
+            raw = call_llm("column-classify", messages=[{"role": "user", "content": prompt}])
             cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
             full_cat = cat_simple.get(cleaned.strip('。，、\'"').strip())
             if full_cat:
                 results[a['title']] = full_cat
             else:
-                # Try stripping punctuation and re-match
                 for k, v in cat_simple.items():
                     if k in cleaned:
                         results[a['title']] = v
                         break
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"  ⚠ LLM分类失败: {a['title'][:30]}... {e}")
-
+            # 不进 results，上游会用关键词分类回退
     return results
 
 
