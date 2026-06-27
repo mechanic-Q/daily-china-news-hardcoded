@@ -1,0 +1,11 @@
+Phase 13 全部 16 步 execute 完成 ✅
+
+Worktree apply: baseline 不匹配（主项目 llm.yaml 已手动编辑），手动 cp 同步 5 个文件到主项目。
+已验证：
+- step4/7/8 9 栏 COLUMN_ORDER 一致
+- 主项目 import score_signals/aggregate_scores/assign_category 正常
+- tests/test_column_scoring.py 30/30 pass
+- llm.yaml column-score temperature=0.0
+- Worktree cleaned
+
+下一步：git add + commit + sillyspec run verify

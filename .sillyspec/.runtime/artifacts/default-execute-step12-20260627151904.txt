@@ -1,0 +1,11 @@
+设计对照检查通过 ✅：
+1. ✅ 9 栏 COLUMN_ORDER，🤖 在第 2 位
+2. ✅ score_signals 接口正常，model=ds/deepseek-chat 运行
+3. ✅ aggregate_scores 公式 (0.5+0.3imp/10+0.2time/10)，系数对外暴露
+4. ✅ assign_category 方案 X（🔬≥7→🔬，argmax 其余）
+5. ✅ 空栏目占位已删除，只写非空栏目 heading
+6. ✅ legacy 函数保留（score_all_categories/llm_classify_single/priority_score）
+7. ✅ llm.yaml column-score temperature=0.0
+8. ✅ step7/step8 COLUMN_ORDER 同步（🤖 在第 2 位）
+9. ✅ CATEGORY_KEYWORDS 9 栏，🤖 59 词
+10. ✅ 降级率监控 stderr 输出⚠

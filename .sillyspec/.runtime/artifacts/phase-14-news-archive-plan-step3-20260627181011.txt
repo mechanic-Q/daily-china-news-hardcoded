@@ -1,0 +1,1 @@
+已加载 proposal/design/requirements/tasks/decisions；decisions.md D-001@v1~D-010@v1 全 accepted，无 unresolved/blocking。模块：新增 news_archive.py/archive_news.py 无 _module-map 条目；step4.py (classifier)。架构：文件接力流水线，5步串行，无数据库。约束：不改 step1_3/6/7/8/run_all.sh，不做正文/图片/月报。变更风险 profile: unit-sufficient（新增 helper + step4 小改动 + tests）。

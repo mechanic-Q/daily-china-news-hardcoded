@@ -1,0 +1,1 @@
+已生成 .sillyspec/changes/default/module-impact.md。三重交叉验证：design.md 声明范围、tasks.md 任务路径、git diff HEAD~1 真实变更一致，涉及 4 个模块：classifier(逻辑变更)、summarizer/renderer(配置变更)、llm-client(配置变更)。step4/7/8/llm.yaml 为真实变更文件。tests/test_column_scoring.py 未在模块映射中注册，建议下次 scan 补充。模块卡片 classifier/summarizer/renderer 的 8 栏旧描述仍待刷新。

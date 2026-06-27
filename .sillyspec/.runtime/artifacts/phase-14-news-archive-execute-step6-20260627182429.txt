@@ -1,0 +1,1 @@
+step4.py 完成: 新增9栏COLUMN_ORDER、score_signals/aggregate_scores/assign_category/_validate_signals/build_classification_result、run() 接入build_classification_result+archive调用。step7/step8 COLUMN_ORDER同步更新，llm.yaml 新增 column-score 配置。test_column_scoring 31/31 通过。

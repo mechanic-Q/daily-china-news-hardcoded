@@ -1,0 +1,12 @@
+自检通过 ✅ plan_level=full：
+- 11 task 全部含编号 + Wave 下 checkbox
+- Wave 1-5 分组依赖关系明确
+- 任务总表含优先级/依赖列，无估时列
+- 关键路径已标（task-02→04→05→06→07→09→10）
+- 9 项全局验收（含兼容/降级条款）
+- D-001~D-019 全在覆盖矩阵
+- 无 unresolved blocker
+- 调用点搜索：score_all_categories/llm_classify_single/priority_score/CATEGORY_KEYWORDS/COLUMN_ORDER 全部在 step4/7/8 三处，已纳入计划
+- 与 design.md §5 文件变更清单一致：step4.py / step7.py / step8.py / llm.yaml / tests/test_column_scoring.py
+- 无实现细节、无 Mermaid（依赖结构线性主+1分支可读，省图）
+- 无泛泛风险
