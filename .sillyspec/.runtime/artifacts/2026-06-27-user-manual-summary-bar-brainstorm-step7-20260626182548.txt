@@ -1,0 +1,1 @@
+需求澄清 Grill skipped：无 P0 歧义，P1/P2 歧义已在对话式探索中确认。决策草稿：D-001@v1 accepted/user: 删除 step8 顶部总摘要栏，不替换其他内容，验收=生成HTML中无 class=summary 且标题后直接进入正文双栏；D-002@v1 accepted/user: USER_MANUAL.md 覆盖项目功能、run_all/step用法、sillyspec命令、time计时、常见故障、后续Phase路线；D-003@v1 accepted/user: 性能量化、栏目算法重做拆为后续 phase，不纳入本次实现。剩余风险：手册可能随后续 phase 过期，需在 archive 时同步更新。

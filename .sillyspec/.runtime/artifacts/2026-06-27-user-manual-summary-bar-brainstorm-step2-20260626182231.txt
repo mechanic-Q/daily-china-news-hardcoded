@@ -1,0 +1,1 @@
+项目=Daily(7信源新闻流水线,5 Python step+1 shell), 单项目无需子项目判定。涉及模块: (a) renderer/step8.py — generate_summary()+.summary CSS+模板; (b) 新增 USER_MANUAL.md 文档(根目录),覆盖入口/参数/sillyspec常用命令/time计时/分支/known-issues/性能调试。架构约定:文件接力管道+确定性+硬编码BASE_DIR+按local.yaml test_strategy=skip。

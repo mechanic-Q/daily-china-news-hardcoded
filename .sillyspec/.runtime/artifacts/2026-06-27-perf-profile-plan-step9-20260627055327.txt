@@ -1,0 +1,1 @@
+一致性审查通过。文件路径：task-01 改 perf_profile.py，task-02 改 run_all.sh，task-03/04 为验证任务，无修改冲突。依赖关系与 plan.md Wave 一致：W1 task-01/task-02，W2 task-03/task-04。验收标准与 plan 全局验收一致。接口定义自洽：perf_profile.py 是新增 CLI，run_all.sh CLI 不变。生产接线路径检查通过：design 提到的入口文件 perf_profile.py/run_all.sh 均在 allowed_paths。符号影响面检查通过：未改函数/类/API 签名，无调用点遗漏。

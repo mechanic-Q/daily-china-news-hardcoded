@@ -1,0 +1,1 @@
+存在并已读取：.sillyspec/changes/2026-06-27-perf-profile/proposal.md, design.md, requirements.md, tasks.md, decisions.md；.sillyspec/local.yaml；.sillyspec/docs/Daily/scan/STRUCTURE.md, CONVENTIONS.md, ARCHITECTURE.md；.sillyspec/docs/Daily/modules/_module-map.yaml, orchestrator.md, collector.md。不存在/未使用：CODEBASE-OVERVIEW.md, STACK.md（以 scan 文档/local.yaml 替代）。

@@ -1,0 +1,1 @@
+plan_level: light\nreason: 涉及新增 perf_profile.py、修改 run_all.sh 和报告验证，范围清晰但跨新增入口+orchestrator，需要明确验收防止范围漂移。\nestimated_files: 2\ncross_module: true\nhas_schema_change: false\nhas_state_machine_change: false\nneeds_parallel_execution: false\nneeds_human_review: false

@@ -1,0 +1,1 @@
+scan 阶段完成. 自检全通过: 7/7 scan 文档 + 6/6 模块卡片 + 1 flow + glossary + 4 knowledge 文件 + _module-map.yaml + local.yaml. 路径合规✅(无源码目录污染). frontmatter 完整✅. _env-detect.md 已清理. git add .sillyspec/ 已暂存(28 files, +1849 lines). 无 API 错误,无 fallback. 最终状态: success.

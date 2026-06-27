@@ -1,0 +1,1 @@
+plan_level: light\nreason: 涉及 step8.py + 新增 USER_MANUAL.md + 规范/验证文件，虽然实现简单但需要明确验收避免文档范围漂移。\nestimated_files: 2\ncross_module: false\nhas_schema_change: false\nhas_state_machine_change: false\nneeds_parallel_execution: false\nneeds_human_review: false

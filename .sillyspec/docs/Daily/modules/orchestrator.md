@@ -41,7 +41,10 @@ source_commit: 5f76a1a
 
 ### 输出格式
 - 每个 step 执行前 echo 空行 + `═══ 运行: <step> --date <date> <dry_run> ═══`
+- 每个 step 执行后输出 `⏱ <step>: <duration>s`
 - 全流程结束 echo 空行 + `✅ 全管道完成: <date>`
+- 全流程结束后输出 `⏱ 总耗时: <duration>s`
+- step 失败时输出已耗时再 exit 1
 - 错误信息通过 `>&2` 写入 stderr
 
 ## 关键逻辑
@@ -51,9 +54,15 @@ source_commit: 5f76a1a
 # 3. SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"   # 解析脚本所在绝对目录
 # 4. STEPS=("step1_3.py" "step4.py" "step6.py" "step7.py" "step8.py")
 # 5. for step in "${STEPS[@]}":
+#        step_start=$(date +%s)
+#        set +e
 #        python3 "$SCRIPT_DIR/$step" --date "$DATE" $DRY_RUN
+#        exit_code=$?
+#        set -e
+#        step_end=$(date +%s)
+#        echo "⏱ $step: $(( step_end - step_start ))s"
 #        if [[ $exit_code -ne 0 ]] → echo 失败 → exit 1
-# 6. 全部完成 → echo ✅
+# 6. 全部完成 → echo ✅ → echo "⏱ 总耗时: ...s"
 ```
 
 ## 注意事项
@@ -69,7 +78,7 @@ source_commit: 5f76a1a
 
 ### Bash 陷阱
 - `$DRY_RUN` 不加引号：当未指定 `--dry-run` 时变量为空字符串，需让 bash 自动丢弃该 token；加引号会向 python 传入一个空参数 `""`，可能被 argparse 拒绝
-- `set -e` 与显式 `exit_code` 检查并存：`set -e` 本身已会在 step 失败时退出，显式 `if [[ $exit_code -ne 0 ]]` 的存在仅为打印中文错误提示后再退出，便于人工阅读
+- `set -e` 与显式 `exit_code` 检查并存：计时实现中先 `set +e` 捕获 exit_code 后 `set -e` 恢复，确保计时输出在失败路径下也能生效
 - `SCRIPT_DIR` 使用 `cd ... && pwd` 解析绝对路径，确保跨工作目录调用时 step 文件能被正确定位
 
 ### 可重入性

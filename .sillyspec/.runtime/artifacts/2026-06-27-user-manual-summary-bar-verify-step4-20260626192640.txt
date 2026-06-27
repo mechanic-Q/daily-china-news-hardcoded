@@ -1,0 +1,1 @@
+探针1: 未实现标记 — generate_summary 本身不是TODO标记, 但它是设计要删除的代码。探针2: generate_summary/.summary 关键词在 step8.py 仍有匹配(design要求删除)。探针3: local.yaml test_strategy=skip, 无测试文件。探针4: D-001~D-004全部accepted, 但D-001(v1)的实现证据在 worktree 中, 主仓库未同步(FAIL blocker: 文件未更新)。探针5: 无 contract-artifacts。需要在执行阶段重新应用变更。

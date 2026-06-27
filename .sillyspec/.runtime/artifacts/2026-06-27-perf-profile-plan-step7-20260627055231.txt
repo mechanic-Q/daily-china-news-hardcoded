@@ -1,0 +1,1 @@
+已生成 4 个任务蓝图：tasks/task-01.md 新增 perf_profile.py；tasks/task-02.md 修改 run_all.sh 计时；tasks/task-03.md 验证 profiler 报告；tasks/task-04.md 验证 run_all 计时与兼容。每个文件含 frontmatter、修改文件、覆盖来源、实现要求、接口定义、边界处理>=5、非目标、TDD、验收表格。
