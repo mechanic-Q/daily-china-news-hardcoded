@@ -1,0 +1,1 @@
+一致性审查通过。文件冲突：task05~06 共改 step4.py 属同一 Wave 内顺序追加，无冲突。入口检查：design 入口(step4.run/archive_news.py CLI)均落入 allowed_paths，不改 run_all.sh 已确认(D-007)。符号影响：纯函数无 constructor/interface/API client 变更，step4→news_archive 导入单向无循环。无问题。

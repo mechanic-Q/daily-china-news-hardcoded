@@ -1,0 +1,1 @@
+选定方案B：新增 news_archive.py 作为归档 helper，step4 在评分完成后 best-effort 调用 archive_articles 写入月度 JSONL；新增 archive_news.py --date 独立补跑历史日期。方案B覆盖 D-002(14A metadata+score/signals)、D-003(run_all best-effort)、D-004(独立补跑)，避免方案A的 step4 过胖，也避免方案C事件日志过重。

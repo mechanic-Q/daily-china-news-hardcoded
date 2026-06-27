@@ -1,0 +1,1 @@
+tasks/ 目录存在，task-01.md 至 task-11.md 均存在且均有“验收标准”章节。但 11 个 task 文件的验收标准均为表格行，checkbox_total=0、checked=0、unchecked=0；不存在已勾选验收项，无法按本步骤要求确认“checkbox 是否全部勾选”。验收结果：不通过。未通过项：task-01~task-11 均缺少可勾选/已勾选的验收 checkbox；其中 task-02/task-04/task-09/task-10/task-11 还在前序检查中存在实际证据缺口或不一致。

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Step 4: 栏目分类筛选 — 从 0新闻_粗筛.md 生成 1新闻_链接.md
-读取 step1_3.py 的输出，按 8 栏目分类 → 质量过滤 → 优先级排序 → 精选输出
+读取 step1_3.py 的输出，按 9 栏目分类 → 质量过滤 → 优先级排序 → 精选输出
 
 用法:
     python3 step4.py                      # 处理今天
@@ -10,6 +10,7 @@ Step 4: 栏目分类筛选 — 从 0新闻_粗筛.md 生成 1新闻_链接.md
 """
 
 import datetime
+import json
 import re
 import sys
 from pathlib import Path
@@ -17,6 +18,24 @@ from pathlib import Path
 from llm_client import call_llm, LLMCallError
 
 BASE_DIR = Path("/mnt/e/每日新中国")
+
+COLUMN_ORDER = [
+    '🔬 世界性科研突破',
+    '🤖 AI智能前沿',
+    '🌾 农业',
+    '🤝 扶贫',
+    '⚡ 能源',
+    '🏥 医疗',
+    '🚀 科技',
+    '🧱 材料',
+    '🎖️ 军事',
+]
+
+WORLD_CLASS_THRESHOLD = 7
+WORLD_CLASS_CATEGORY = '🔬 世界性科研突破'
+AGG_RELEV_BASE = 0.5
+AGG_IMP_W = 0.3
+AGG_TIME_W = 0.2
 
 EXCLUDE_TITLES = [
     '春雨落', '百谷生', '谷雨', '舞蹈诗剧', '三月三', '时装周',
@@ -79,7 +98,6 @@ def is_china_source(url):
 
 
 def llm_is_china_related(title):
-    """LLM 涉华兜底判定，失败时返回 False（保留现有 fallback 语义）。"""
     try:
         from llm_client import call_llm
         ans = call_llm(
@@ -111,7 +129,6 @@ def parse_args():
 
 
 def parse_0(path, today):
-    """解析 0新闻_粗筛.md，提取通过 HTTP 200 验证的条目"""
     if not path.exists():
         print(f"文件不存在: {path}")
         return []
@@ -128,7 +145,6 @@ def parse_0(path, today):
 
 
 def is_quality_news(title):
-    """新闻质量过滤：排除非新闻内容 + 负面新闻"""
     for kw in EXCLUDE_TITLES:
         if kw in title:
             return False
@@ -147,6 +163,16 @@ CATEGORY_KEYWORDS = {
         '火星': 3, '月球': 3, '宇宙': 3, '火箭发射': 3,
         '发现': 2, '突破': 2,
         '研究': 1, '实验': 1, '论文': 1,
+    },
+    '🤖 AI智能前沿': {
+        '人工智能': 5, '大模型': 5, 'AI': 5, 'ChatGPT': 5, 'GPT': 5,
+        'DeepSeek': 5, '通义千问': 5, '文心一言': 5, '豆包': 5,
+        '智谱': 4, 'GLM': 4, 'LLM': 4, '多模态': 4,
+        '机器学习': 4, '深度学习': 4, '神经网络': 4,
+        '强化学习': 4, 'Transformer': 4, '扩散模型': 4,
+        'AIGC': 3, '生成式': 3, '自动驾驶': 3, '智能体': 3,
+        'AI Agent': 3, 'RAG': 3, '向量': 2, '语义': 2,
+        '认知': 2, '算法': 2, '训练': 1, '推理': 1,
     },
     '🌾 农业': {
         '农业': 3, '粮食': 3, '农产品': 3, '农田': 3,
@@ -174,10 +200,12 @@ CATEGORY_KEYWORDS = {
         '健康': 1, '卫生': 1,
     },
     '🚀 科技': {
-        '人工智能': 3, 'AI': 3, '机器人': 3, '无人机': 3,
-        '算力': 3, '科创': 2, '数字': 2, '数据': 2, '智能': 2,
+        '龙芯': 4, '飞腾': 4, '鲲鹏': 4, '兆芯': 4,
+        '芯片': 3, '5G': 3, '6G': 3, '算力': 3,
+        '机器人': 3, '无人机': 3, '科创': 2,
+        '数字': 2, '数据': 2, '智能': 2,
         '科技': 2, '创新': 1, '生产线': 1,
-        '专利': 2, '中关村': 2, '芯片': 2, '5G': 2,
+        '专利': 2, '中关村': 2,
         '经济': 1, '产业': 1, '发展': 1, '建设': 1, '项目': 1,
     },
     '🧱 材料': {
@@ -205,7 +233,6 @@ def score_all_categories(title):
 
 
 def llm_classify_single(articles):
-    """逐条用 LLM 分类，返回 {title: category}。失败的条目不进 results。"""
     import re
     from llm_client import call_llm
 
@@ -218,7 +245,7 @@ def llm_classify_single(articles):
 
     results = {}
     for a in articles:
-        prompt = f"从以下栏目中选一个最贴合的，只输出栏目名称，不要输出其他文字。\n\n栏目：科技、军事、医疗、能源、农业、科研突破、材料、扶贫\n\n标题：{a['title']}\n\n最贴合的栏目："
+        prompt = f"从以下栏目中选一个最贴合的，只输出栏目名称，不要输出其他文字。\n\n栏目：AI智能前沿、科技、军事、医疗、能源、农业、科研突破、材料、扶贫\n\n标题：{a['title']}\n\n最贴合的栏目："
 
         try:
             raw = call_llm("column-classify", messages=[{"role": "user", "content": prompt}])
@@ -235,7 +262,6 @@ def llm_classify_single(articles):
             import traceback
             traceback.print_exc()
             print(f"  ⚠ LLM分类失败: {a['title'][:30]}... {e}")
-            # 不进 results，上游会用关键词分类回退
     return results
 
 
@@ -274,24 +300,77 @@ def detect_source(url):
     return '综合'
 
 
-def run(today, dry_run):
+def _validate_signals(signals):
+    if not isinstance(signals, dict):
+        return False
+    relev = signals.get('relevance')
+    if not isinstance(relev, dict):
+        return False
+    for col in COLUMN_ORDER:
+        if col not in relev:
+            return False
+    if set(relev.keys()) != set(COLUMN_ORDER):
+        return False
+    for key in ('importance', 'timeliness'):
+        val = signals.get(key)
+        if not isinstance(val, (int, float)):
+            return False
+        if val < 0 or val > 10:
+            return False
+    return True
+
+
+def aggregate_scores(signals):
+    relev = signals['relevance']
+    imp = signals['importance']
+    time_ = signals['timeliness']
+    factor = AGG_RELEV_BASE + AGG_IMP_W * imp / 10 + AGG_TIME_W * time_ / 10
+    return {col: relev[col] * factor for col in COLUMN_ORDER}
+
+
+def assign_category(signals):
+    relev = signals['relevance']
+    world_raw = relev.get(WORLD_CLASS_CATEGORY, 0)
+    if world_raw >= WORLD_CLASS_THRESHOLD:
+        return WORLD_CLASS_CATEGORY
+    scores = aggregate_scores(signals)
+    best_col = max(scores, key=scores.get)
+    if scores[best_col] == 0:
+        return None
+    return best_col
+
+
+def score_signals(title, source):
+    from llm_client import call_llm
+    try:
+        prompt = (
+            f"分析以下新闻标题，从9个维度各给出0-10的relevance评分，以及importance(0-10)和timeliness(0-10)。"
+            f"只输出JSON。\n\n标题：{title}\n\n"
+            f"9维度：{', '.join(COLUMN_ORDER)}\n\n"
+            f"JSON格式：{{\"relevance\": {{\"🔬 世界性科研突破\": 0, ...}}, \"importance\": 0, \"timeliness\": 0}}"
+        )
+        raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}])
+        raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+        raw = re.sub(r'^```json\s*', '', raw)
+        raw = re.sub(r'\s*```$', '', raw)
+        signals = json.loads(raw)
+        if _validate_signals(signals):
+            return signals
+        return None
+    except Exception:
+        return None
+
+
+def build_classification_result(today):
     today_str = today.strftime("%Y-%m-%d")
     input_path = BASE_DIR / today_str / "0新闻_粗筛.md"
 
-    print(f"═══ Step 4: 分类筛选 ═══")
-    print(f"日期: {today_str}")
-    print(f"数据: {input_path}\n")
-
     articles = parse_0(input_path, today)
     if not articles:
-        print("❌ 0新闻_粗筛.md 为空或无通过条目")
-        return
+        return {}, []
 
-    total = len(articles)
     articles = [a for a in articles if is_quality_news(a["title"])]
-    quality_removed = total - len(articles)
 
-    # 涉华过滤：关键词 → 来源检测 → LLM回退
     china_pass = []
     china_llm = []
     for a in articles:
@@ -299,72 +378,63 @@ def run(today, dry_run):
             china_pass.append(a)
         elif is_china_source(a["url"]):
             china_llm.append(a)
-    # LLM 确认来源是中国但关键词未命中的
     llm_confirmed = []
     for a in china_llm:
         if llm_is_china_related(a["title"]):
             llm_confirmed.append(a)
-    china_removed = len(articles) - len(china_pass) - len(llm_confirmed)
     articles = china_pass + llm_confirmed
-    quality_removed += china_removed
-    print(f"原始: {total}条  质量过滤: 移除{quality_removed}条  → {len(articles)}条\n")
 
-    col_order = [
-        '🔬 世界性科研突破', '🌾 农业', '🤝 扶贫', '⚡ 能源',
-        '🏥 医疗', '🚀 科技', '🧱 材料', '🎖️ 军事',
-    ]
-    classified = {col: [] for col in col_order}
-
-    # Phase 1: 关键词评分 → 分离高置信度 / 低置信度
-    high_confidence = {}
-    low_confidence = []
+    classified = {col: [] for col in COLUMN_ORDER}
+    llm_fail_count = 0
 
     for a in articles:
-        scores = score_all_categories(a['title'])
-        if scores:
-            sorted_cats = sorted(scores.items(), key=lambda x: -x[1])
-            best_cat, best_score = sorted_cats[0]
-            second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
-            if best_score >= 4 and (best_score - second_score) >= 2:
-                high_confidence[a['title']] = best_cat
-            else:
-                low_confidence.append(a)
+        source = detect_source(a['url'])
+        signals = score_signals(a['title'], source)
+        if signals is not None:
+            a['signals'] = signals
+            a['score_source'] = 'llm'
+            scores = aggregate_scores(signals)
+            cat = assign_category(signals)
+            if cat is None:
+                continue
+            priority = scores.get(cat, 0)
         else:
-            low_confidence.append(a)
+            llm_fail_count += 1
+            kw_scores = score_all_categories(a['title'])
+            if not kw_scores:
+                continue
+            try:
+                sorted_cats = sorted(kw_scores.items(), key=lambda x: -x[1])
+                best_cat, best_score = sorted_cats[0]
+                second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
+                if best_score >= 4 and (best_score - second_score) >= 2:
+                    cat = best_cat
+                else:
+                    try:
+                        results = llm_classify_single([a])
+                        cat = results.get(a['title']) or best_cat
+                    except Exception:
+                        cat = best_cat
+            except Exception:
+                cat = max(kw_scores, key=kw_scores.get)
+            a['signals'] = None
+            a['score_source'] = 'keyword-fallback'
+            priority = priority_score(a['title'], cat) + kw_scores.get(cat, 0)
+        a['category'] = cat
+        a['priority'] = priority
+        classified[cat].append(a)
 
-    # Phase 2: LLM 逐条裁决低置信度
-    llm_results = {}
-    if low_confidence:
-        print(f"  关键词高置信度: {len(high_confidence)}条, LLM裁决: {len(low_confidence)}条")
-        llm_results = llm_classify_single(low_confidence)
-
-    # Phase 3: 合并结果，归入栏目
-    for a in articles:
-        cat = high_confidence.get(a['title'])
-        if not cat:
-            cat = llm_results.get(a['title'])
-        if not cat and score_all_categories(a['title']):
-            scores = score_all_categories(a['title'])
-            cat = max(scores, key=scores.get)
-        if cat and cat in classified:
-            a['category'] = cat
-            a['priority'] = priority_score(a['title'], cat)
-            classified[cat].append(a)
+    if articles:
+        llm_fail_pct = llm_fail_count / len(articles) * 100
+        if llm_fail_pct >= 30:
+            print(f"\n⚠ column-score 降级率 {llm_fail_pct:.0f}%", file=sys.stderr)
 
     for col in classified:
         classified[col].sort(key=lambda x: -x.get('priority', 0))
 
-    for col in col_order:
-        if classified[col]:
-            top = classified[col][0]
-            print(f"  {col}: {len(classified[col])}条 [最高={top.get('priority',0)}] {top['title'][:40]}")
-        else:
-            print(f"  {col}: 0条")
-
     selected = []
     used_urls = set()
-
-    for col in col_order:
+    for col in COLUMN_ORDER:
         pool = [a for a in classified[col] if a['url'] not in used_urls]
         if pool:
             pick = pool[0]
@@ -373,18 +443,39 @@ def run(today, dry_run):
             used_urls.add(pick['url'])
 
     remaining = []
-    for col in col_order:
+    for col in COLUMN_ORDER:
         for a in classified[col]:
             if a['url'] not in used_urls:
                 remaining.append(a)
     remaining.sort(key=lambda x: -x.get('priority', 0))
-
     while len(selected) < 10 and remaining:
         pick = remaining.pop(0)
         if pick['url'] not in used_urls:
-            pick['column'] = pick.get('category', '🚀 科技')
+            pick['column'] = pick.get('category', COLUMN_ORDER[1])
             selected.append(pick)
             used_urls.add(pick['url'])
+
+    return classified, selected
+
+
+def run(today, dry_run):
+    today_str = today.strftime("%Y-%m-%d")
+
+    print(f"═══ Step 4: 分类筛选 ═══")
+    print(f"日期: {today_str}")
+
+    classified, selected = build_classification_result(today)
+
+    if not classified:
+        print("❌ 0新闻_粗筛.md 为空或无通过条目")
+        return
+
+    for col in COLUMN_ORDER:
+        if classified[col]:
+            top = classified[col][0]
+            print(f"  {col}: {len(classified[col])}条 [最高={top.get('priority',0)}] {top['title'][:40]}")
+        else:
+            print(f"  {col}: 0条")
 
     print(f"\n精选: {len(selected)}条")
     for a in selected:
@@ -392,26 +483,27 @@ def run(today, dry_run):
         print(f"  [{ps}分] {a.get('column', '?')} | {a['title'][:50]}")
 
     lines = [f"# {today_str} 精选新闻（按栏目分类）\n"]
-    for col in col_order:
+    for col in COLUMN_ORDER:
         col_selected = [a for a in selected if a.get('column') == col]
+        if not col_selected:
+            continue
         lines.append(f"\n## {col}\n")
-        if col_selected:
-            for a in col_selected:
-                src = detect_source(a['url'])
-                lines.append(f"### [{src}] {a['title']}")
-                lines.append(f"URL：{a['url']}")
-                lines.append('')
-        else:
-            lines.append('（当日无真实报道，栏目留空）\n')
+        for a in col_selected:
+            src = detect_source(a['url'])
+            lines.append(f"### [{src}] {a['title']}")
+            lines.append(f"URL：{a['url']}")
+            lines.append('')
 
     output_path = BASE_DIR / today_str / "1新闻_链接.md"
-
     if dry_run:
         print(f"\n═══ 预览: {output_path} ═══")
         print("\n".join(lines)[:2000])
     else:
         output_path.write_text("\n".join(lines), encoding="utf-8")
         print(f"\n✅ 已写入: {output_path}")
+
+    from news_archive import archive_articles_best_effort
+    archive_articles_best_effort(today_str, classified, selected, dry_run)
 
 
 def main():

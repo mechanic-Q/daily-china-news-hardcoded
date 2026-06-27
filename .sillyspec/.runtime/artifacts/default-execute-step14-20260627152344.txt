@@ -1,0 +1,9 @@
+代码审查通过 ✅：
+- 0 处 TODO/FIXME/XXX/BUG/HACK
+- 风格一致：无 type hints、无直接 openai import、中文 emoji print
+- _strip_think + _strip_codefence 正确处理 think 标签和 markdown 代码块
+- COLUMN_ORDER[1] 正确作为兜底栏目
+- 降级路径保留且安全（onion 式降级）
+- 无冗余代码或可简化逻辑
+- 错误处理覆盖 12 种异常场景
+- llm.yaml 不存储 api_key（仅 env 引用）

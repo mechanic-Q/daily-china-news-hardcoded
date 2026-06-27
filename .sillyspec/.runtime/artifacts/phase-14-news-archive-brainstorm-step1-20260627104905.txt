@@ -1,0 +1,44 @@
+问题原因：sillyspec run 不接受 change 作为位置参数，phase-14-news-archive 被忽略，命中了已完成的 default change。正确写法是 ---
+stage: brainstorm
+step: 1/13
+stepName: 状态检查
+project: Daily
+change: phase-14-news-archive
+changeDir: .sillyspec/changes/phase-14-news-archive
+---
+
+### 🎯 你的角色：资深架构师
+你是一位有 15 年经验的系统架构师。先理解业务本质，再设计技术方案。决策附理由，方案列 trade-off。不确定就说不确定，不猜。
+
+## Step 1/13: 状态检查
+
+检查当前变更的进度状态（sillyspec.db）。
+
+### 操作
+1. 运行 `sillyspec progress show`
+2. 确认 currentStage 为 "brainstorm"
+3. 如果有进行中的 brainstorm，提示选择继续或重新开始
+4. 如果未初始化，提示先运行 sillyspec init
+5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 `2026-06-02-new-change`），询问用户确认实际变更名，然后运行 `sillyspec change-rename <旧名> <新名>` 重命名
+
+### 输出
+当前状态摘要（1-2 句话）
+
+### 注意
+- 以 CLI 返回为准，不要自行推断阶段
+- 如果阶段不对，输出正确提示并停止
+- **不要用 mv 命令重命名变更目录**，必须使用 `sillyspec change-rename`，否则 DB 和目录会脱节
+
+### ⚠️ 铁律
+- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。
+- 只做本步骤描述的操作，不得自行扩展或跳过
+- 不要回头修改已完成的步骤
+- 不要编造不存在的 CLI 子命令
+- 完成后立即执行 --done 命令，不得跳过
+- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`
+- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）
+- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值
+- **文件路径规则：所有变更文件必须写入 `.sillyspec/changes/phase-14-news-archive/` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：`.sillyspec/changes/phase-14-news-archive/proposal.md`**
+
+### 完成后执行
+sillyspec run brainstorm --done --change phase-14-news-archive --input "用户原始需求/反馈" --output "你的摘要"。当前 phase-14-news-archive 已进入 brainstorm step 1/13，currentStage=brainstorm。

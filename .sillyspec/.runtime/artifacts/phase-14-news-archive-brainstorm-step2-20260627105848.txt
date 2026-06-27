@@ -1,0 +1,1 @@
+项目是单项目 Daily：Python 文件接力式新闻流水线，输出根目录 /mnt/e/每日新中国，local.yaml 指定无 build/test/lint，完整运行 ./run_all.sh。Phase 14 主要涉及 classifier(step4.py，评分后有所有合格文章元数据)、extractor(step6.py，正文/图片候选)、summarizer(step7.py，top-10 摘要)、可能新增 archive 模块（JSONL/月报），以及 run_all.sh 是否接入。当前活跃变更：default（Phase 13 已完成并 commit b56d2c7）与 phase-14-news-archive；本次需求所属子项目为 Daily。

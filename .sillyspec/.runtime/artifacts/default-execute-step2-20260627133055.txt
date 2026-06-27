@@ -1,0 +1,1 @@
+上下文已加载：plan.md、design.md、CONVENTIONS.md、ARCHITECTURE.md、_module-map.yaml、classifier.md/summarizer.md/renderer.md。符号影响面检查：step4.py 无 class/constructor/interface 变更；新增/修改函数（score_signals/aggregate_scores/assign_category）全为 step4 内部新增，无外部 import caller。step7/step8 COLUMN_ORDER 仅常量变更，无 import 调用 step4。无调用点遗漏。source_path 正确：/mnt/e/Daily。

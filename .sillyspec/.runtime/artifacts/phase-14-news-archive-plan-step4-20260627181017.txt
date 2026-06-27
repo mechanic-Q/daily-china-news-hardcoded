@@ -1,0 +1,1 @@
+proposal.md ✅ | design.md ✅ | requirements.md ✅ | tasks.md ✅ | decisions.md ✅ (D-001~D-010@v1 全 accepted) | CONVENTIONS.md ✅ | ARCHITECTURE.md ✅ | _module-map.yaml ✅ | local.yaml ✅. 变更文件 4 个：news_archive.py(新增)、archive_news.py(新增)、step4.py(修改)、tests/test_news_archive.py(新增)。

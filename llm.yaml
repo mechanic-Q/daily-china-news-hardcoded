@@ -7,6 +7,10 @@ call_sites:
     max_tokens: 2048
     temperature: 0.7
     timeout: 60
+  column-score:
+    max_tokens: 256
+    temperature: 0.0
+    timeout: 30
   summarize:
     max_tokens: 512
     temperature: 0.7
