@@ -1,0 +1,8 @@
+一致性审查通过 ✅
+- 文件路径冲突：Wave 2 内 task-03 / task-04 都改 step4.py，但编辑不同节（task-03 改 CATEGORY_KEYWORDS 字典；task-04 新增函数），可并行也可串行；execute 子代理需以串行方式处理同一文件以避免合并冲突
+- 依赖一致：tasks/*.md depends_on 与 plan.md Wave 一致
+- 验收一致：task 内 AC 与 plan 全局 AC 互补，无矛盾
+- 接口自洽：task-04 声明 COLUMN_ORDER/WORLD_CLASS_THRESHOLD/AGG_* 常量；task-01/05/06 引用一致
+- 生产接线路径检查：design.md 不涉及构造/inject/入口接线；step4/7/8 已通过 run_all.sh 编排，无需新增入口；不适用
+- 符号影响面检查：rg score_all_categories/llm_classify_single/priority_score/CATEGORY_KEYWORDS/COLUMN_ORDER 全部调用点均在 step4.py 与 step7/8 已纳入 allowed_paths；新增函数无外部调用者
+- task-10 / task-11 是验证型任务 allowed_paths=[] 正确

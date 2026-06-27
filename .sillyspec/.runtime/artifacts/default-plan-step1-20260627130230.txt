@@ -1,0 +1,8 @@
+plan_level: full
+reason: 评分链整体重做 + 新增第 9 栏 + 方案 X 抢占 + 空栏目消失，11 task / 5 Wave，跨 step4/step7/step8/llm.yaml/tests 共 5+ 文件，prompt 与 schema 校验属于行为变更，需要人工把关栏目语义
+estimated_files: 5
+cross_module: true
+has_schema_change: true
+has_state_machine_change: false
+needs_parallel_execution: false
+needs_human_review: true

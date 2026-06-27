@@ -1,0 +1,18 @@
+文件加载清单：
+- ✅ .sillyspec/changes/default/design.md (13 章 + Design Grill passed)
+- ✅ .sillyspec/changes/default/decisions.md (D-001~D-019@v1，全 accepted)
+- ✅ .sillyspec/changes/default/proposal.md (10 项 S-xx)
+- ✅ .sillyspec/changes/default/requirements.md (FR-01~FR-11 + 19 D-x 覆盖矩阵)
+- ✅ .sillyspec/changes/default/tasks.md (5 Wave × 11 task 初稿)
+- ✅ .sillyspec/docs/Daily/scan/ARCHITECTURE.md
+- ✅ .sillyspec/docs/Daily/scan/CONVENTIONS.md
+- ✅ .sillyspec/docs/Daily/scan/STRUCTURE.md
+- ✅ .sillyspec/docs/Daily/modules/_module-map.yaml
+- ✅ .sillyspec/docs/Daily/modules/classifier.md
+- ✅ .sillyspec/docs/Daily/modules/summarizer.md
+- ✅ .sillyspec/docs/Daily/modules/renderer.md
+- ✅ .sillyspec/docs/Daily/modules/extractor.md
+- ✅ .sillyspec/docs/Daily/modules/llm-client.md（间接，通过 _module-map）
+- ✅ .sillyspec/local.yaml (test=skip, run=./run_all.sh)
+- ✅ step4.py / step7.py / step8.py / llm_client.py / llm.yaml / run_all.sh（设计验证用）
+- ❌ STACK.md 不存在（项目无独立 STACK 文件，技术栈在 ARCHITECTURE.md §1）

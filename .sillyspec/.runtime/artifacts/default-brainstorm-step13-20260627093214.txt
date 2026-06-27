@@ -1,0 +1,1 @@
+已生成 4 件套：\n- design.md（13 章，§4.0 含 9 栏完整语义契约 + §4.1 抢占 + §4.2 空栏目）\n- decisions.md（D-001~D-019 共 19 条）\n- proposal.md（10 项变更范围 + 10 项非目标 + 10 项 S-xx 成功标准）\n- requirements.md（FR-01~FR-11 + 决策覆盖矩阵）\n- tasks.md（5 个 Wave × 11 个 task）\n已 git add，未 commit。

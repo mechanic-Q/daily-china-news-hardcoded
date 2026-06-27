@@ -6,6 +6,42 @@ last_session: Phase 12 已完成 (perf_profile.py + run_all.sh 计时)
 
 # Next Phase
 
+## Phase 14: 性能优化（基于 Phase 12 数据）
+
+### 背景
+Phase 12 (perf_profile.py) 量化显示瓶颈：
+- step1_3.py ~88s — 7 信源串行 + chromium cold-start 5 次
+- step7.py ~102s — LLM 逐条串行摘要
+- step6.py ~73s — 正文串行提取 + chromium
+- step4.py ~41s — LLM 分类
+- step8.py ~7s — 渲染截图（快）
+
+### 优化方向
+1. **step1_3 信源并发抓取**：7 个信源由串行改为 `asyncio.gather` 或 `concurrent.futures`，预计节省 60-70s
+2. **Chromium 进程复用**：改为 playwright 持久浏览器，避免每信源 cold-start（当前 5 次 × ~3s）
+3. **step6/step7 LLM/正文并行**：`asyncio.gather` 并行调用 LLM，预计节省 40-50s
+4. **详情页 URL 并发 fetch**：urllib 串行改 `aiohttp` 并发
+
+### 约束
+- 不改报纸产物 HTML/PNG 语义
+- 不改栏目评分算法（Phase 13 已独立）
+- 不改 `run_all.sh` CLI 和失败语义
+
+### 来源
+- Phase 11 对话用户确认："先量化再优化我同意"
+- Phase 12 数据已落地
+
+### 前置阶段
+- Phase 11: 删 summary bar + USER_MANUAL.md ✅
+- Phase 12: 性能量化 ✅
+- Phase 13: 栏目算法完全重做 ✅
+
+### 建议分支
+`phase-14-perf-optimize`
+
+### Change 命名
+`YYYY-MM-DD-perf-optimize`
+
 ## Phase 13: 栏目算法完全重做（LLM 主导）
 
 ### 背景
