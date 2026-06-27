@@ -1,0 +1,1 @@
+已生成 11 个独立 task blueprint：.sillyspec/changes/default/tasks/task-01.md ~ task-11.md，覆盖 5 Wave。每个 blueprint 含 frontmatter（id/title/priority/depends_on/blocks/requirement_ids/decision_ids/allowed_paths）+ 修改文件/覆盖来源/实现要求/接口定义/边界处理/非目标/参考/TDD步骤/验收标准。

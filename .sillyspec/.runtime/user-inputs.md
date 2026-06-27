@@ -547,52 +547,88 @@ task-10✅ 异常路径已验证（ConfigError + fallback）
 - 输入：更新路线图和提交
 - 输出：归档完成。变更已移至 archive/2026-06-27-2026-06-27-perf-profile/。已暂存: .sillyspec/changes/ 和 .sillyspec/docs/ 变更。无 ROADMAP.md 需更新。累积规范统计: Phase 12 归档完毕。
 
-## 2026/6/27 15:26:57 | default | brainstorm: 对话式探索 [CONTINUED]
-- 回答：新开 Phase 13 (column-scoring-v2)，不是 Phase 12
+## 2026/6/27 21:02:30 | default | plan: 复杂度分类
+- 输入：Phase 13 column-scoring-v2 复杂度分类
+- 输出：plan_level: full
+reason: 评分链整体重做 + 新增第 9 栏 + 方案 X 抢占 + 空栏目消失，11 task / 5 Wave，跨 step4/step7/step8/llm.yaml/tests 共 5+ 文件，prompt 与 schema 校验属于行为变更，需要人工把关栏目语义
+estimated_files: 5
+cross_module: true
+has_schema_change: true
+has_state_machine_change: false
+needs_parallel_execution: false
+needs_human_review: true
 
-## 2026/6/27 15:27:36 | default | brainstorm: 对话式探索 [CONTINUED]
-- 回答：Phase 13: column-scoring-v2 — 给专栏评分/排序的新功能，不是 Phase 07 的修復
+## 2026/6/27 21:02:50 | default | plan: 状态检查
+- 输入：Phase 13 plan 状态检查
+- 输出：currentStage = plan；plan_level=full 已确认；变更 default 的 brainstorm 13 步骤已全部完成并 commit b56d2c7（progress show 上 brainstorm 显示停在 step 6 是显示遗留，实际 step 7-13 均已 --done 推进，所以系统已允许进入 plan 阶段）。
 
-## 2026/6/27 15:27:50 | default | brainstorm: 对话式探索
-- 输入：用户要 Phase 13 column-scoring-v2
-- 输出：## 需求理解摘要\n\n- Phase 13: column-scoring-v2 — 给专栏评分/排序功能\n- 不是 Phase 07 column-balance 的修复，是独立新功能\n- 评分机制未确定（LLM 打分 / 规则计算 / 混合）\n- 与 column-balance 的交互关系待定（共存/替代）\n- 打分维度待定（质量/热度/相关性等）\n- 使用场景：控制专栏在 newspaper render 中的排序
+## 2026/6/27 21:07:36 | default | plan: 加载上下文
+- 输入：Phase 13 plan 加载上下文
+- 输出：已加载：design.md(13 章+§13 Grill passed)、decisions.md(D-001~D-019@v1 全 accepted，无 unresolved)、proposal.md(10 项 S-xx)、requirements.md(FR-01~FR-11)、tasks.md(5 Wave × 11 task)、CONVENTIONS.md/ARCHITECTURE.md/STACK 隐式（无独立 STACK.md）、local.yaml(run=./run_all.sh, test=skip)、_module-map.yaml。匹配模块：classifier(step4，主改) used_by extractor；summarizer(step7) 同步 COLUMN_ORDER；renderer(step8) 同步 COLUMN_ORDER。llm-client used_by classifier，新增 column-score call_site。模块依赖链 classifier→extractor→summarizer→renderer，但本次实际改 step4/7/8 + llm.yaml + tests，extractor/summarizer 逻辑零变更。
 
-## 2026/6/27 15:28:28 | default | brainstorm: 需求澄清 Grill
-- 输入：Phase 13 column-scoring-v2: 栏目评分重做（来自 user-manual-summary-bar 存档记录）
-- 输出：需求澄清 Grill skipped — 0 P0、0 P1 歧义。\n已确认：Phase 13 = 重做 step4.py 栏目评分算法，当前为 CATEGORY_KEYWORDS 关键词加权+LLM裁决。\n与 Phase 07 column-balance（渲染侧视觉平衡）无功能重叠。
+## 2026/6/27 21:07:48 | default | plan: 锚定确认
+- 输入：锚定确认
+- 输出：文件加载清单：
+- ✅ .sillyspec/changes/default/design.md (13 章 + Design Grill passed)
+- ✅ .sillyspec/changes/default/decisions.md (D-001~D-019@v1，全 accepted)
+- ✅ .sillyspec/changes/default/proposal.md (10 项 S-xx)
+- ✅ .sillyspec/changes/default/requirements.md (FR-01~FR-11 + 19 D-x 覆盖矩阵)
+- ✅ .sillyspec/changes/default/tasks.md (5 Wave × 11 task 初稿)
+- ✅ .sillyspec/docs/Daily/scan/ARCHITECTURE.md
+- ✅ .sillyspec/docs/Daily/scan/CONVENTIONS.md
+- ✅ .sillyspec/docs/Daily/scan/STRUCTURE.md
+- ✅ .sillyspec/docs/Daily/modules/_module-map.yaml
+- ✅ .sillyspec/docs/Daily/modules/classifier.md
+- ✅ .sillyspec/docs/Daily/modules/summarizer.md
+- ✅ .sillyspec/docs/Daily/modules/renderer.md
+- ✅ .sillyspec/docs/Daily/modules/extractor.md
+- ✅ .sillyspec/docs/Daily/modules/llm-client.md（间接，通过 _module-map）
+- ✅ .sillyspec/local.yaml (test=skip, run=./run_all.sh)
+- ✅ step4.py / step7.py / step8.py / llm_client.py / llm.yaml / run_all.sh（设计验证用）
+- ❌ STACK.md 不存在（项目无独立 STACK 文件，技术栈在 ARCHITECTURE.md §1）
 
-## 2026/6/27 15:30:40 | default | brainstorm: 提出 2-3 种方案 [CONTINUED]
-- 回答：选 B+ 信号提取式（LLM 单次输出多维结构化评分 + 关键词兜底，符合 2025 PASTEL/MAPEGY 生产模式）。需用户确认或换其他方案。
+## 2026/6/27 21:08:44 | default | plan: 按复杂度生成分级计划
+- 输入：生成 full plan.md
+- 输出：已写入 .sillyspec/changes/default/plan.md：5 Wave × 11 task；含任务总表、关键路径、9 项全局验收、D-001~D-019 覆盖矩阵。task-XX checkbox 格式齐全。
 
-## 2026/6/27 15:35:44 | default | brainstorm: 提出 2-3 种方案 [CONTINUED]
-- 回答：B+ 信号提取式：LLM 单次输出多维结构化评分(relevance/importance/timeliness) + 关键词离线兜底
+## 2026/6/27 21:09:09 | default | plan: 自检总览
+- 输入：Phase 13 plan 自检
+- 输出：自检通过 ✅ plan_level=full：
+- 11 task 全部含编号 + Wave 下 checkbox
+- Wave 1-5 分组依赖关系明确
+- 任务总表含优先级/依赖列，无估时列
+- 关键路径已标（task-02→04→05→06→07→09→10）
+- 9 项全局验收（含兼容/降级条款）
+- D-001~D-019 全在覆盖矩阵
+- 无 unresolved blocker
+- 调用点搜索：score_all_categories/llm_classify_single/priority_score/CATEGORY_KEYWORDS/COLUMN_ORDER 全部在 step4/7/8 三处，已纳入计划
+- 与 design.md §5 文件变更清单一致：step4.py / step7.py / step8.py / llm.yaml / tests/test_column_scoring.py
+- 无实现细节、无 Mermaid（依赖结构线性主+1分支可读，省图）
+- 无泛泛风险
 
-## 2026/6/27 15:35:54 | default | brainstorm: 提出 2-3 种方案
-- 输入：用户确认选 B+
-- 输出：## 选定方案：B+ 信号提取式\n\n核心：LLM 单次调用为每篇文章输出结构化多维评分（与 8 栏目各自的相关度 0-10、重要性 0-10、时效性 0-10），离线确定性公式聚合排序；关键词层保留作兜底。\n\n依据：\n- 2025 PASTEL (EPJ Data Sci) / MAPEGY 生产实践：LLM 做多信号提取器优于单次直接分类\n- EMNLP 2025: LLM 多标签直输有 calibration 问题，结构化输出 + 公式聚合可规避\n- 每篇 1 次 LLM 调用 (~200篇/天)，GLM-4-Flash 可负担\n- 关键词兜底保证离线/限流时流水线不停\n\n覆盖范围：step4.py 评分链路重做，不动 step1_3/6/7/8。
+## 2026/6/27 21:13:32 | default | plan: 生成任务蓝图（子代理并行）
+- 输入：Phase 13 plan 任务蓝图
+- 输出：已生成 11 个独立 task blueprint：.sillyspec/changes/default/tasks/task-01.md ~ task-11.md，覆盖 5 Wave。每个 blueprint 含 frontmatter（id/title/priority/depends_on/blocks/requirement_ids/decision_ids/allowed_paths）+ 修改文件/覆盖来源/实现要求/接口定义/边界处理/非目标/参考/TDD步骤/验收标准。
 
-## 2026/6/27 15:39:08 | default | brainstorm: 分段展示设计 [CONTINUED]
-- 回答：确认设计，变更名 2026-06-27-column-scoring-v2
+## 2026/6/27 21:14:32 | default | plan: 重排 Wave（基于 depends_on）
+- 输入：Wave 重排
+- 输出：拓扑排序基于 task-NN.md depends_on 字段重排为 7 Wave（与原 5 Wave 草稿不同）：W1 task-01/02；W2 task-03/04；W3 task-05/06；W4 task-07；W5 task-08；W6 task-09；W7 task-10/11。无循环依赖。plan.md 已更新，含 Mermaid 依赖图（非平凡）+ 任务总表 Wave 列重排 + 关键路径 task-02→04→05→06→07→08→09→10。
 
-## 2026/6/27 15:39:18 | default | brainstorm: 分段展示设计
-- 输入：用户已确认设计与变更名
-- 输出：## 设计已确认\n\n变更名: 2026-06-27-column-scoring-v2\n\n范围:\n- 改: step4.py 评分链 + llm.yaml 新增 column-score call site\n- 不改: step1_3/6/7/8、1新闻_链接.md 格式、china-filter\n\n核心:\n- LLM 单次返回 {relevance{8栏目: 0-10}, importance: 0-10, timeliness: 0-10}\n- aggregate = relevance × (0.5 + 0.3·imp/10 + 0.2·time/10)\n- 归属 = argmax(relevance)，栏目内按 aggregate 排\n- 失败降级关键词层\n\n性能: ~200 次 GLM-4-Flash/天，<7 min。
+## 2026/6/27 21:15:03 | default | plan: 审查一致性
+- 输入：Phase 13 plan 一致性审查
+- 输出：一致性审查通过 ✅
+- 文件路径冲突：Wave 2 内 task-03 / task-04 都改 step4.py，但编辑不同节（task-03 改 CATEGORY_KEYWORDS 字典；task-04 新增函数），可并行也可串行；execute 子代理需以串行方式处理同一文件以避免合并冲突
+- 依赖一致：tasks/*.md depends_on 与 plan.md Wave 一致
+- 验收一致：task 内 AC 与 plan 全局 AC 互补，无矛盾
+- 接口自洽：task-04 声明 COLUMN_ORDER/WORLD_CLASS_THRESHOLD/AGG_* 常量；task-01/05/06 引用一致
+- 生产接线路径检查：design.md 不涉及构造/inject/入口接线；step4/7/8 已通过 run_all.sh 编排，无需新增入口；不适用
+- 符号影响面检查：rg score_all_categories/llm_classify_single/priority_score/CATEGORY_KEYWORDS/COLUMN_ORDER 全部调用点均在 step4.py 与 step7/8 已纳入 allowed_paths；新增函数无外部调用者
+- task-10 / task-11 是验证型任务 allowed_paths=[] 正确
 
-## 2026/6/27 15:40:10 | default | brainstorm: HTML 原型生成
-- 输入：生成原型
-- 输出：原型: .sillyspec/changes/default/prototype-column-scoring-v2.html — 含数据流对比/LLM I/O 样例/聚合公式 5 个场景/失败降级矩阵/改动清单/性能预估
-
-## 2026/6/27 15:42:26 | default | brainstorm: 写设计文档并自审
-- 输入：design 与 decisions 已写
-- 输出：已写入 .sillyspec/changes/default/design.md（12 章 + 自审 11 项全过）和 decisions.md（D-001@v1 ~ D-007@v1）。自审通过，可进入 Design Grill。
-
-## 2026/6/27 15:44:33 | default | brainstorm: Design Grill 交叉审查
-- 输入：Design Grill 自动交叉审查，发现 6 个交叉点，全部代码/文档可证实，无 P0/P1 unresolved
-- 输出：Design Grill passed ✅。新增 D-008@v1/D-009@v1/D-010@v1 三条决策；R-08/R-09 风险补登；AC-08 新增。可进入 Step 13。
-
-## 2026/6/27 15:49:21 | default | brainstorm: 用户确认并生成规范文件 [CONTINUED]
-- 回答：用户指出关键缺口：每个栏目的语义/价值观判定标准未讨论。需回退到 step 6 重新展开 8 栏目语义契约（intent + must + must-not + 正反例），再回到机制设计。
-
-## 2026/6/27 17:32:14 | default | brainstorm: 用户确认并生成规范文件
-- 输入：用户确认全部 9 栏设计 + AI智能前沿新栏 + 方案X抢占 + 空栏目消失 + 国产 GPU/CPU 厂商清单
-- 输出：已生成 4 件套：\n- design.md（13 章，§4.0 含 9 栏完整语义契约 + §4.1 抢占 + §4.2 空栏目）\n- decisions.md（D-001~D-019 共 19 条）\n- proposal.md（10 项变更范围 + 10 项非目标 + 10 项 S-xx 成功标准）\n- requirements.md（FR-01~FR-11 + 决策覆盖矩阵）\n- tasks.md（5 个 Wave × 11 个 task）\n已 git add，未 commit。
+## 2026/6/27 21:15:17 | default | plan: 保存并更新进度
+- 输入：Phase 13 plan 收尾
+- 输出：Phase 13 plan 完成 ✅
+- .sillyspec/changes/default/plan.md (含 7 Wave + Mermaid 依赖图 + 任务总表 + 关键路径 + 9 项全局 AC + D 覆盖矩阵)
+- 11 个独立 task blueprint：.sillyspec/changes/default/tasks/task-01.md ~ task-11.md
+- 自检/审查全部通过；无 P0/P1 unresolved blocker
+下一步：sillyspec run execute --change default

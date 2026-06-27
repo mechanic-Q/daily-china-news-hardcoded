@@ -1,0 +1,1 @@
+拓扑排序基于 task-NN.md depends_on 字段重排为 7 Wave（与原 5 Wave 草稿不同）：W1 task-01/02；W2 task-03/04；W3 task-05/06；W4 task-07；W5 task-08；W6 task-09；W7 task-10/11。无循环依赖。plan.md 已更新，含 Mermaid 依赖图（非平凡）+ 任务总表 Wave 列重排 + 关键路径 task-02→04→05→06→07→08→09→10。
