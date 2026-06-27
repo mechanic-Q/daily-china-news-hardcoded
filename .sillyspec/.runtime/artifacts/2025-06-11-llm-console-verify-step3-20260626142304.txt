@@ -1,0 +1,11 @@
+任务完成度: 10/10(100%).
+task-01✅ llm.yaml (4keys+3providers+3call_sites)
+task-02✅ llm_client.py (load_config/get_client/call_llm/ConfigError/LLMCallError)
+task-03✅ requirements.txt (5 packages)
+task-04✅ .env (NINEROUTER_API_KEY)
+task-05✅ step4 china-relevance call_llm
+task-06✅ step4 column-classify call_llm
+task-07✅ step7 call_llm + retry 3 + _why_invalid + fallback_summarize
+task-08✅ CLAUDE.md references llm.yaml/llm_client (5 matches)
+task-09✅ dry-run已验证（step4 2026-06-25 + step7 2026-06-25 + zhipu切换）
+task-10✅ 异常路径已验证（ConfigError + fallback）

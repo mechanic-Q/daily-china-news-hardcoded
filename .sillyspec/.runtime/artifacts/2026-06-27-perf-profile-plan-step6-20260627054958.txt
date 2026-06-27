@@ -1,0 +1,1 @@
+自检通过（plan_level=light）：plan.md 标注 light；包含来源/范围/Tasks/验收/覆盖矩阵；task 使用 checkbox 格式；验收具体可验证；D-001@v1~D-004@v1 全覆盖；无 unresolved blocker；无 Mermaid/估时/风险分析/代码实现细节；与 design.md 文件变更清单一致（perf_profile.py, run_all.sh, 变更目录原型/文档）。

@@ -1,0 +1,39 @@
+---
+author: lmr
+created_at: 2026-06-27 13:36:39
+---
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Phase 12 Prototype — Perf Profile Report</title>
+<style>
+body{font-family:system-ui,"Microsoft YaHei",sans-serif;margin:0;background:#f6f1e6;color:#1d1d1d;padding:24px}.wrap{max-width:980px;margin:auto;background:#fffdf7;border:2px solid #1d1d1d;padding:24px}h1{margin:0 0 8px}.meta{color:#666;margin-bottom:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{border:1px solid #c8beb0;padding:14px;background:#fbf7ee}.bar{height:18px;background:#ddd;margin:6px 0}.bar span{display:block;height:100%;background:#6f5a44}.slow{background:#c0392b!important}table{border-collapse:collapse;width:100%;margin-top:18px}td,th{border:1px solid #c8beb0;padding:8px;text-align:left}code{background:#eee8dc;padding:2px 4px}.flow{white-space:pre;background:#eee8dc;padding:12px;overflow:auto}</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Phase 12 性能量化报告原型</h1>
+<div class="meta">date=YYYY-MM-DD · dry_run=true · total=312.4s · slowest=step7</div>
+<div class="flow">perf_profile.py
+  ├─ step1_3.py  88.2s  OK
+  ├─ step4.py    41.6s  OK
+  ├─ step6.py    73.5s  OK
+  ├─ step7.py   102.1s  OK   ← slowest
+  └─ step8.py     7.0s  OK</div>
+<div class="grid">
+  <div class="card"><h2>最慢步骤</h2><div>step7 摘要生成</div><div class="bar"><span class="slow" style="width:100%"></span></div><div>102.1s / 32.7%</div></div>
+  <div class="card"><h2>报告产物</h2><p><code>perf/YYYY-MM-DD-profile.json</code></p><p><code>perf/YYYY-MM-DD-profile.md</code></p></div>
+</div>
+<table>
+<thead><tr><th>step</th><th>duration_s</th><th>exit_code</th><th>note</th></tr></thead>
+<tbody>
+<tr><td>step1_3</td><td>88.2</td><td>0</td><td>network/chromium suspected</td></tr>
+<tr><td>step4</td><td>41.6</td><td>0</td><td>LLM classify suspected</td></tr>
+<tr><td>step6</td><td>73.5</td><td>0</td><td>body extract/chromium suspected</td></tr>
+<tr><td>step7</td><td>102.1</td><td>0</td><td>LLM summarize suspected</td></tr>
+<tr><td>step8</td><td>7.0</td><td>0</td><td>render/screenshot</td></tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>

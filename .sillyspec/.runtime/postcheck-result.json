@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-24T10:18:35.393Z",
+  "overall_status": "success",
+  "source_root": "/mnt/e/Daily",
+  "summary": {
+    "total_checks": 0,
+    "critical": 0,
+    "error": 0,
+    "warning": 0
+  },
+  "failure_categories": {
+    "violations": [],
+    "missing_outputs": [],
+    "path_pollution": [],
+    "bad_references": [],
+    "quality_warnings": []
+  },
+  "checks": []
+}

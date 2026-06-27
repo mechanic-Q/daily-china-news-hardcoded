@@ -10,6 +10,40 @@ author: lmr
 # depends_on 表达的是"数据流依赖"，不是 Python import 依赖。
 
 modules:
+  profiler:
+    status: active
+    doc: null
+    paths:
+      - perf_profile.py
+    tags:
+      - perf
+      - profile
+      - 性能
+      - 计时
+      - profiler
+    aliases:
+      - perf_profile
+      - 性能量化
+    entrypoints:
+      - "python3 perf_profile.py --date YYYY-MM-DD [--dry-run]"
+    main_symbols:
+      - parse_args
+      - tail_text
+      - build_md_report
+      - run_profiler
+    depends_on:
+      - collector
+      - classifier
+      - extractor
+      - summarizer
+      - renderer
+    used_by: []
+    needs_review: false
+    concerns:
+      - "dry-run下 step1_3 仍执行真实网络抓取，可能耗时过长"
+    review_reasons: []
+
+
   llm-client:
     status: active
     doc: modules/llm-client.md

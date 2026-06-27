@@ -1,0 +1,1 @@
+_module-map.yaml 生成: 6 模块 (collector/classifier/extractor/summarizer/renderer/orchestrator). 数据流依赖链 collector→classifier→extractor→summarizer→renderer←orchestrator(汇总). classifier+summarizer 标 needs_review=true (LLM 调用点,本次变更目标).

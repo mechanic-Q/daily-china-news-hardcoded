@@ -1,0 +1,1 @@
+一致性审查通过。文件路径：task-01 改 step8.py，task-02 改 USER_MANUAL.md，task-03/04 为验证任务，无修改冲突。依赖关系与 plan.md Wave 一致：W1 task-01/task-02，W2 task-03/task-04。验收标准与 plan 全局验收一致。接口定义自洽：step8 CLI/build_html 签名不变，文档任务无代码接口。生产接线路径检查通过：design 明确不改 run_all/入口，step8 原入口不变。符号影响面检查通过：未改函数签名/构造/DTO/API client。

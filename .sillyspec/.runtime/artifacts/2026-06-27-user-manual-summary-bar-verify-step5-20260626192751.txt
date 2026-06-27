@@ -1,0 +1,1 @@
+task-01(删除summary栏) AC: py_compile 0 ✅, rg 无残留 ✅, build_html header 后直接 story-wrap; task-02(手册) AC: 233行, 全部10章覆盖; task-03(step8验证) AC: 全部通过; task-04(手册验证) AC: 14/14 全部通过。主仓库文件已手动修正(worktree apply 因 runtime 文件校验失败, 已在主仓库重新应用 step8.py 编辑 + 确认 USER_MANUAL.md 内容)。

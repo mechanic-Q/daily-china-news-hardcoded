@@ -1,0 +1,1 @@
+项目上下文已加载：Daily 是 Python 3.12 新闻流水线，5 个 step 脚本通过 Markdown 文件接力，无包结构；run_all.sh 串联 step1_3→step4→step6→step7→step8。关键约定：手写 parse_args，--date/--dry-run，输出硬编码到 /mnt/e/每日新中国/{date}，API key 来自 .env，构建/测试/lint 均未配置。模块索引显示模块为 llm-client、collector、classifier、extractor、summarizer、renderer、orchestrator；当前需求未给具体功能关键词，暂无法精确匹配模块；所属子项目为 Daily/sillyspec 单项目。

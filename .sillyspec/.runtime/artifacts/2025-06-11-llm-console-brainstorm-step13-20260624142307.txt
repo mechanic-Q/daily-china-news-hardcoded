@@ -1,0 +1,1 @@
+brainstorm 阶段完成. 生成 4 件套: proposal.md(动机+范围+成功标准 6 条) + requirements.md(6 FR + 决策覆盖矩阵 11 条 D) + tasks.md(3 阶段 10 任务) + design.md (Grill 修订版). decisions.md 共 11 条 D-xxx@v1. git add 37 files +2666 lines. 推进 plan.

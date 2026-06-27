@@ -1,0 +1,1 @@
+execute 阶段完成。worktree(worktree模式) — check-only 因 runtime 文件校验失败, 手动同步 perf_profile.py+run_all.sh 到主仓库, 后 cleanup。变更: perf_profile.py(+160行), run_all.sh(+修改计时), USER_MANUAL.md(后续路线更新待决定)。建议下一步: sillyspec run verify。
