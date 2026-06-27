@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Phase 13 · column-scoring-v2 · 原型</title>
+<style>
+  body{font-family:system-ui,"Microsoft YaHei",sans-serif;margin:0;background:#f6f1e6;color:#1d1d1d;padding:24px}
+  .wrap{max-width:1100px;margin:auto;background:#fffdf7;border:2px solid #1d1d1d;padding:24px}
+  h1{margin:0 0 4px;font-size:28px}
+  .sub{color:#666;margin-bottom:20px}
+  h2{border-top:2px solid #1d1d1d;padding-top:10px;margin-top:28px;font-size:20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
+  .card{border:1px solid #c8beb0;padding:14px;background:#fbf7ee}
+  .card h3{margin:0 0 8px;font-size:16px}
+  pre{background:#eee8dc;padding:12px;border-radius:4px;font-size:12px;white-space:pre-wrap;line-height:1.4;margin:6px 0}
+  .flow{background:#eee8dc;padding:14px;font-family:monospace;font-size:12px;white-space:pre;overflow:auto}
+  table{border-collapse:collapse;width:100%;margin-top:8px;font-size:13px}
+  th,td{border:1px solid #c8beb0;padding:6px 8px;text-align:left}
+  th{background:#eee8dc}
+  .old{color:#888;text-decoration:line-through}
+  .new{color:#197d3d;font-weight:bold}
+  .bar{height:14px;background:#ddd;border-radius:2px;overflow:hidden;margin-top:2px}
+  .bar span{display:block;height:100%;background:#6f5a44}
+  .signal{display:inline-block;padding:2px 8px;margin:2px;background:#e8dfce;border-radius:10px;font-size:12px}
+  .pill-good{background:#cfead2;color:#197d3d}
+  .pill-warn{background:#f6e6cf;color:#a25a14}
+  code{background:#eee8dc;padding:2px 5px;border-radius:3px;font-size:12px}
+  .meta{font-size:11px;color:#888;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Phase 13 · 栏目评分 v2</h1>
+  <div class="sub">B+ 信号提取式 · LLM 单次结构化输出 + 关键词兜底</div>
+
+  <h2>1. 数据流对比</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>旧（v1，当前 step4.py）</h3>
+<div class="flow">title
+  ↓
+score_all_categories(title)
+  ↓ Σ keyword·weight (8 cat)
+  ↓
+top1 ~= top2 ?
+  ├─ yes → llm_classify_single
+  └─ no  → use top1
+  ↓
+栏目内多篇 → 取最高分 1 篇
+  ↓
+top-10 by score</div>
+      <div class="meta">特性：纯关键词，长尾词易漏；LLM 仅做仲裁，1 题 1 调；无重要性/时效性维度</div>
+    </div>
+
+    <div class="card">
+      <h3 class="new">新（v2，本次方案）</h3>
+<div class="flow">title + source
+  ↓
+score_signals(title, source)
+  ├─ call_llm("column-score") → JSON
+  └─ fallback → 旧关键词分数
+  ↓
+{relevance{8 cat}, importance, timeliness}
+  ↓
+aggregate = relev·(0.5 + 0.3·imp/10 + 0.2·time/10)
+  ↓
+归属栏目 = argmax(relevance)
+栏目内排序 = aggregate desc
+  ↓
+top-10</div>
+      <div class="meta">特性：语义打分 + 显式重要性/时效性；关键词层保留；JSON Schema 强约束</div>
+    </div>
+  </div>
+
+  <h2>2. LLM I/O 样例</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Prompt（节选）</h3>
+<pre>你是中国正面新闻编辑。对下面新闻标题就 8 个栏目分别打分：
+栏目：🔬 世界性科研突破 / 🌾 农业 / 🤝 扶贫 / ⚡ 能源 / 🏥 医疗 / 🚀 科技 / 🧱 材料 / 🎖️ 军事
+
+输出 JSON：
+{
+  "relevance": {"🔬 世界性科研突破": 0-10, ...8 项},
+  "importance": 0-10,     // 该新闻自身重要性
+  "timeliness": 0-10      // 时效/突发性
+}
+
+标题: 中科院团队首次在常温下实现拓扑超导体
+来源: news.cas.cn</pre>
+    </div>
+    <div class="card">
+      <h3>Output</h3>
+<pre>{
+  "relevance": {
+    "🔬 世界性科研突破": 9,
+    "🌾 农业": 0, "🤝 扶贫": 0,
+    "⚡ 能源": 2, "🏥 医疗": 0,
+    "🚀 科技": 7, "🧱 材料": 5,
+    "🎖️ 军事": 0
+  },
+  "importance": 8,
+  "timeliness": 6
+}</pre>
+      <div class="meta">argmax(relevance) → 🔬 世界性科研突破<br>
+      aggregate = 9 × (0.5 + 0.24 + 0.12) = 9 × 0.86 ≈ <b>7.74</b></div>
+    </div>
+  </div>
+
+  <h2>3. 聚合公式可视化</h2>
+  <table>
+    <tr><th>样例</th><th>relev</th><th>imp</th><th>time</th><th>aggregate</th><th>bar</th></tr>
+    <tr><td>突发科研 (顶级)</td><td>9</td><td>9</td><td>9</td><td>8.55</td><td><div class="bar"><span style="width:95%"></span></div></td></tr>
+    <tr><td>顶级相关·常规</td><td>9</td><td>5</td><td>5</td><td>6.75</td><td><div class="bar"><span style="width:75%"></span></div></td></tr>
+    <tr><td>顶级相关·过期</td><td>9</td><td>5</td><td>1</td><td>5.94</td><td><div class="bar"><span style="width:66%"></span></div></td></tr>
+    <tr><td>中度相关·重要</td><td>6</td><td>9</td><td>5</td><td>4.98</td><td><div class="bar"><span style="width:55%"></span></div></td></tr>
+    <tr><td>勉强沾边·突发</td><td>3</td><td>5</td><td>9</td><td>2.49</td><td><div class="bar"><span style="width:28%"></span></div></td></tr>
+  </table>
+  <div class="meta">公式：aggregate = relevance × (0.5 + 0.3·imp/10 + 0.2·time/10)；relevance 仍是主导（最高 50% 权重不可压缩），imp/time 至多调出 50% 加成</div>
+
+  <h2>4. 失败降级矩阵</h2>
+  <table>
+    <tr><th>场景</th><th>v1 行为</th><th>v2 行为</th></tr>
+    <tr><td>LLM 网络 fail</td><td class="old">空跑 / except return False</td><td class="new">fall back 到旧关键词分数</td></tr>
+    <tr><td>JSON 解析失败</td><td>N/A</td><td class="new">1 次重试 → 仍失败降级</td></tr>
+    <tr><td>8 栏目 key 缺失</td><td>N/A</td><td class="new">视为 JSON 失败</td></tr>
+    <tr><td>降级率 >30%/批</td><td>N/A</td><td class="new"><span class="signal pill-warn">stderr WARN</span> 流水线不中断</td></tr>
+    <tr><td>top1 ≈ top2 仲裁</td><td class="old">额外 llm_classify_single 调</td><td class="new">不需要（已含 8 维 relevance）</td></tr>
+  </table>
+
+  <h2>5. 改动清单</h2>
+  <table>
+    <tr><th>文件</th><th>动作</th><th>要点</th></tr>
+    <tr><td><code>step4.py</code></td><td class="new">改</td><td>新增 score_signals/aggregate；调用点接入 call_llm("column-score")</td></tr>
+    <tr><td><code>llm.yaml</code></td><td class="new">追加 call_sites.column-score</td><td>glm-4-flash, temp=0, max_tokens=200, timeout=20</td></tr>
+    <tr><td><code>step1_3.py / step6.py / step7.py / step8.py</code></td><td>不动</td><td>上下游契约不变</td></tr>
+    <tr><td><code>1新闻_链接.md</code></td><td>格式不变</td><td>仅排序内容可能不同</td></tr>
+  </table>
+
+  <h2>6. 性能预估</h2>
+  <table>
+    <tr><th>项</th><th>估值</th></tr>
+    <tr><td>每天文章数</td><td>~200</td></tr>
+    <tr><td>LLM 调用 (v1 仲裁层)</td><td>~30/day (低置信度时)</td></tr>
+    <tr><td>LLM 调用 (v2)</td><td>~200/day (每篇 1 次)</td></tr>
+    <tr><td>每调用 token</td><td>~300 in + ~200 out</td></tr>
+    <tr><td>每天 token</td><td>~100k</td></tr>
+    <tr><td>GLM-4-Flash 时延 P95</td><td>~2 s</td></tr>
+    <tr><td>step4 总耗时</td><td>~7 min (串行)</td></tr>
+  </table>
+
+  <div class="meta" style="margin-top:24px">
+    Phase 13 · 2026-06-27-column-scoring-v2 · sillyspec brainstorm step 10/13
+  </div>
+</div>
+</body>
+</html>

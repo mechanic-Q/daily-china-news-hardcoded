@@ -1,0 +1,1 @@
+## 需求理解摘要\n\n- Phase 13: column-scoring-v2 — 给专栏评分/排序功能\n- 不是 Phase 07 column-balance 的修复，是独立新功能\n- 评分机制未确定（LLM 打分 / 规则计算 / 混合）\n- 与 column-balance 的交互关系待定（共存/替代）\n- 打分维度待定（质量/热度/相关性等）\n- 使用场景：控制专栏在 newspaper render 中的排序

@@ -546,3 +546,53 @@ task-10✅ 异常路径已验证（ConfigError + fallback）
 ## 2026/6/27 14:35:08 | 2026-06-27-perf-profile | archive: 更新路线图和提交
 - 输入：更新路线图和提交
 - 输出：归档完成。变更已移至 archive/2026-06-27-2026-06-27-perf-profile/。已暂存: .sillyspec/changes/ 和 .sillyspec/docs/ 变更。无 ROADMAP.md 需更新。累积规范统计: Phase 12 归档完毕。
+
+## 2026/6/27 15:26:57 | default | brainstorm: 对话式探索 [CONTINUED]
+- 回答：新开 Phase 13 (column-scoring-v2)，不是 Phase 12
+
+## 2026/6/27 15:27:36 | default | brainstorm: 对话式探索 [CONTINUED]
+- 回答：Phase 13: column-scoring-v2 — 给专栏评分/排序的新功能，不是 Phase 07 的修復
+
+## 2026/6/27 15:27:50 | default | brainstorm: 对话式探索
+- 输入：用户要 Phase 13 column-scoring-v2
+- 输出：## 需求理解摘要\n\n- Phase 13: column-scoring-v2 — 给专栏评分/排序功能\n- 不是 Phase 07 column-balance 的修复，是独立新功能\n- 评分机制未确定（LLM 打分 / 规则计算 / 混合）\n- 与 column-balance 的交互关系待定（共存/替代）\n- 打分维度待定（质量/热度/相关性等）\n- 使用场景：控制专栏在 newspaper render 中的排序
+
+## 2026/6/27 15:28:28 | default | brainstorm: 需求澄清 Grill
+- 输入：Phase 13 column-scoring-v2: 栏目评分重做（来自 user-manual-summary-bar 存档记录）
+- 输出：需求澄清 Grill skipped — 0 P0、0 P1 歧义。\n已确认：Phase 13 = 重做 step4.py 栏目评分算法，当前为 CATEGORY_KEYWORDS 关键词加权+LLM裁决。\n与 Phase 07 column-balance（渲染侧视觉平衡）无功能重叠。
+
+## 2026/6/27 15:30:40 | default | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：选 B+ 信号提取式（LLM 单次输出多维结构化评分 + 关键词兜底，符合 2025 PASTEL/MAPEGY 生产模式）。需用户确认或换其他方案。
+
+## 2026/6/27 15:35:44 | default | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：B+ 信号提取式：LLM 单次输出多维结构化评分(relevance/importance/timeliness) + 关键词离线兜底
+
+## 2026/6/27 15:35:54 | default | brainstorm: 提出 2-3 种方案
+- 输入：用户确认选 B+
+- 输出：## 选定方案：B+ 信号提取式\n\n核心：LLM 单次调用为每篇文章输出结构化多维评分（与 8 栏目各自的相关度 0-10、重要性 0-10、时效性 0-10），离线确定性公式聚合排序；关键词层保留作兜底。\n\n依据：\n- 2025 PASTEL (EPJ Data Sci) / MAPEGY 生产实践：LLM 做多信号提取器优于单次直接分类\n- EMNLP 2025: LLM 多标签直输有 calibration 问题，结构化输出 + 公式聚合可规避\n- 每篇 1 次 LLM 调用 (~200篇/天)，GLM-4-Flash 可负担\n- 关键词兜底保证离线/限流时流水线不停\n\n覆盖范围：step4.py 评分链路重做，不动 step1_3/6/7/8。
+
+## 2026/6/27 15:39:08 | default | brainstorm: 分段展示设计 [CONTINUED]
+- 回答：确认设计，变更名 2026-06-27-column-scoring-v2
+
+## 2026/6/27 15:39:18 | default | brainstorm: 分段展示设计
+- 输入：用户已确认设计与变更名
+- 输出：## 设计已确认\n\n变更名: 2026-06-27-column-scoring-v2\n\n范围:\n- 改: step4.py 评分链 + llm.yaml 新增 column-score call site\n- 不改: step1_3/6/7/8、1新闻_链接.md 格式、china-filter\n\n核心:\n- LLM 单次返回 {relevance{8栏目: 0-10}, importance: 0-10, timeliness: 0-10}\n- aggregate = relevance × (0.5 + 0.3·imp/10 + 0.2·time/10)\n- 归属 = argmax(relevance)，栏目内按 aggregate 排\n- 失败降级关键词层\n\n性能: ~200 次 GLM-4-Flash/天，<7 min。
+
+## 2026/6/27 15:40:10 | default | brainstorm: HTML 原型生成
+- 输入：生成原型
+- 输出：原型: .sillyspec/changes/default/prototype-column-scoring-v2.html — 含数据流对比/LLM I/O 样例/聚合公式 5 个场景/失败降级矩阵/改动清单/性能预估
+
+## 2026/6/27 15:42:26 | default | brainstorm: 写设计文档并自审
+- 输入：design 与 decisions 已写
+- 输出：已写入 .sillyspec/changes/default/design.md（12 章 + 自审 11 项全过）和 decisions.md（D-001@v1 ~ D-007@v1）。自审通过，可进入 Design Grill。
+
+## 2026/6/27 15:44:33 | default | brainstorm: Design Grill 交叉审查
+- 输入：Design Grill 自动交叉审查，发现 6 个交叉点，全部代码/文档可证实，无 P0/P1 unresolved
+- 输出：Design Grill passed ✅。新增 D-008@v1/D-009@v1/D-010@v1 三条决策；R-08/R-09 风险补登；AC-08 新增。可进入 Step 13。
+
+## 2026/6/27 15:49:21 | default | brainstorm: 用户确认并生成规范文件 [CONTINUED]
+- 回答：用户指出关键缺口：每个栏目的语义/价值观判定标准未讨论。需回退到 step 6 重新展开 8 栏目语义契约（intent + must + must-not + 正反例），再回到机制设计。
+
+## 2026/6/27 17:32:14 | default | brainstorm: 用户确认并生成规范文件
+- 输入：用户确认全部 9 栏设计 + AI智能前沿新栏 + 方案X抢占 + 空栏目消失 + 国产 GPU/CPU 厂商清单
+- 输出：已生成 4 件套：\n- design.md（13 章，§4.0 含 9 栏完整语义契约 + §4.1 抢占 + §4.2 空栏目）\n- decisions.md（D-001~D-019 共 19 条）\n- proposal.md（10 项变更范围 + 10 项非目标 + 10 项 S-xx 成功标准）\n- requirements.md（FR-01~FR-11 + 决策覆盖矩阵）\n- tasks.md（5 个 Wave × 11 个 task）\n已 git add，未 commit。
