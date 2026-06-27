@@ -1,0 +1,1 @@
+需求理解摘要：Phase 14 拆为 14A 核心归档、14B 正文/图片补全、14C 自动月报；当前变更 phase-14-news-archive 先做 14A。14A 范围：只归档所有符合 Phase 13 栏目规则的合格文章的 metadata + score/signals + selected_in_top10，不含正文/图片。归档默认接入 run_all，但失败不阻断日报；同时提供独立命令补跑历史日期。Phase 13 成果 commit b56d2c7 保留，执行顺序为先 Phase 13 再 Phase 14。

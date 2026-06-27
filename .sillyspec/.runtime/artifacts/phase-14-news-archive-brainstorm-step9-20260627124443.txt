@@ -1,0 +1,1 @@
+设计确认：变更名 2026-06-27-news-archive-core；本次只做 14A 核心 JSONL 归档；新增 news_archive.py helper；step4 best-effort 调用不阻断日报；新增 archive_news.py --date 补跑；输出 /mnt/e/每日新中国/archive/articles/YYYY-MM.jsonl；正文/图片/月报留 14B/14C。

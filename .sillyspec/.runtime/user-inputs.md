@@ -596,3 +596,112 @@ task-10✅ 异常路径已验证（ConfigError + fallback）
 ## 2026/6/27 17:32:14 | default | brainstorm: 用户确认并生成规范文件
 - 输入：用户确认全部 9 栏设计 + AI智能前沿新栏 + 方案X抢占 + 空栏目消失 + 国产 GPU/CPU 厂商清单
 - 输出：已生成 4 件套：\n- design.md（13 章，§4.0 含 9 栏完整语义契约 + §4.1 抢占 + §4.2 空栏目）\n- decisions.md（D-001~D-019 共 19 条）\n- proposal.md（10 项变更范围 + 10 项非目标 + 10 项 S-xx 成功标准）\n- requirements.md（FR-01~FR-11 + 决策覆盖矩阵）\n- tasks.md（5 个 Wave × 11 个 task）\n已 git add，未 commit。
+
+## 2026/6/27 18:49:05 | phase-14-news-archive | brainstorm: 状态检查
+- 输入：用户尝试 sillyspec run brainstorm phase-14-news-archive，报已完成
+- 输出：问题原因：sillyspec run 不接受 change 作为位置参数，phase-14-news-archive 被忽略，命中了已完成的 default change。正确写法是 ---
+stage: brainstorm
+step: 1/13
+stepName: 状态检查
+project: Daily
+change: phase-14-news-archive
+changeDir: .sillyspec/changes/phase-14-news-archive
+---
+
+### 🎯 你的角色：资深架构师
+你是一位有 15 年经验的系统架构师。先理解业务本质，再设计技术方案。决策附理由，方案列 trade-off。不确定就说不确定，不猜。
+
+## Step 1/13: 状态检查
+
+检查当前变更的进度状态（sillyspec.db）。
+
+### 操作
+1. 运行 `sillyspec progress show`
+2. 确认 currentStage 为 "brainstorm"
+3. 如果有进行中的 brainstorm，提示选择继续或重新开始
+4. 如果未初始化，提示先运行 sillyspec init
+5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 `2026-06-02-new-change`），询问用户确认实际变更名，然后运行 `sillyspec change-rename <旧名> <新名>` 重命名
+
+### 输出
+当前状态摘要（1-2 句话）
+
+### 注意
+- 以 CLI 返回为准，不要自行推断阶段
+- 如果阶段不对，输出正确提示并停止
+- **不要用 mv 命令重命名变更目录**，必须使用 `sillyspec change-rename`，否则 DB 和目录会脱节
+
+### ⚠️ 铁律
+- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。
+- 只做本步骤描述的操作，不得自行扩展或跳过
+- 不要回头修改已完成的步骤
+- 不要编造不存在的 CLI 子命令
+- 完成后立即执行 --done 命令，不得跳过
+- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`
+- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）
+- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值
+- **文件路径规则：所有变更文件必须写入 `.sillyspec/changes/phase-14-news-archive/` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：`.sillyspec/changes/phase-14-news-archive/proposal.md`**
+
+### 完成后执行
+sillyspec run brainstorm --done --change phase-14-news-archive --input "用户原始需求/反馈" --output "你的摘要"。当前 phase-14-news-archive 已进入 brainstorm step 1/13，currentStage=brainstorm。
+
+## 2026/6/27 18:58:48 | phase-14-news-archive | brainstorm: 加载项目上下文
+- 输入：Phase 14 news archive：归档所有符合栏目规则的合格新闻，图片 best-effort，自动月报，先做 Phase 13 再做 Phase 14
+- 输出：项目是单项目 Daily：Python 文件接力式新闻流水线，输出根目录 /mnt/e/每日新中国，local.yaml 指定无 build/test/lint，完整运行 ./run_all.sh。Phase 14 主要涉及 classifier(step4.py，评分后有所有合格文章元数据)、extractor(step6.py，正文/图片候选)、summarizer(step7.py，top-10 摘要)、可能新增 archive 模块（JSONL/月报），以及 run_all.sh 是否接入。当前活跃变更：default（Phase 13 已完成并 commit b56d2c7）与 phase-14-news-archive；本次需求所属子项目为 Daily。
+
+## 2026/6/27 19:05:11 | phase-14-news-archive | brainstorm: 协作与复用检查
+- 输入：Phase 14 news archive
+- 输出：检测到活跃变更：default（Phase 13 已完成并 commit b56d2c7，保留不动）和 phase-14-news-archive（当前）。无同名冲突；~/.sillyspec/templates 不存在，无可复用全局模板。继续。
+
+## 2026/6/27 19:05:19 | phase-14-news-archive | brainstorm: 原型/设计图分析
+- 输入：Phase 14 news archive 无原型/设计图
+- 输出：未提供截图、图片或 HTML 原型；本阶段为后端数据归档/知识沉淀设计，无页面原型需要分析，跳过。
+
+## 2026/6/27 19:07:01 | phase-14-news-archive | brainstorm: 需求范围评估 [CONTINUED]
+- 回答：同意拆分
+
+## 2026/6/27 19:09:33 | phase-14-news-archive | brainstorm: 对话式探索 [CONTINUED]
+- 回答：14A 只存元数据+评分；正文/图片留 14B，月报留 14C。理由：14A 先建立最小可运行归档数据库骨架，不依赖正文抓取和图片下载成功。
+
+## 2026/6/27 19:10:35 | phase-14-news-archive | brainstorm: 对话式探索 [CONTINUED]
+- 回答：默认接入 run_all，但归档失败不阻断日报；另提供独立命令补跑历史日期。
+
+## 2026/6/27 19:11:06 | phase-14-news-archive | brainstorm: 对话式探索
+- 输入：用户确认 Phase 14 拆分与 14A 边界
+- 输出：需求理解摘要：Phase 14 拆为 14A 核心归档、14B 正文/图片补全、14C 自动月报；当前变更 phase-14-news-archive 先做 14A。14A 范围：只归档所有符合 Phase 13 栏目规则的合格文章的 metadata + score/signals + selected_in_top10，不含正文/图片。归档默认接入 run_all，但失败不阻断日报；同时提供独立命令补跑历史日期。Phase 13 成果 commit b56d2c7 保留，执行顺序为先 Phase 13 再 Phase 14。
+
+## 2026/6/27 19:11:45 | phase-14-news-archive | brainstorm: 需求澄清 Grill
+- 输入：Phase 14A 需求澄清 Grill
+- 输出：需求澄清 Grill skipped — 无需继续追问。已通过代码/文档确认：step4 当前已掌握所有 classified 文章与 selected top10，正是 14A 归档最佳接入点；run_all.sh 当前 set -e 串行，14A 若接入需 best-effort 包裹避免阻断；Phase 13 design 已定义 9 栏 signals/score，14A 依赖 Phase 13 之后的数据结构。决策草案：D-001 Phase 14 拆分为 14A/14B/14C；D-002 本变更只做 14A metadata+score/signals；D-003 默认接入 run_all 但失败不阻断；D-004 提供独立补跑命令；D-005 Phase 13 commit b56d2c7 保留，先执行 Phase 13 再做 Phase 14。剩余风险：14A 在 Phase 13 未实现前只能基于未来接口设计，execute 前需确认 Phase 13 代码已落地。
+
+## 2026/6/27 19:14:02 | phase-14-news-archive | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：方案B 推荐：新增 news_archive.py helper；step4 best-effort 调用；另提供 archive_news.py --date 独立补跑。
+
+## 2026/6/27 19:14:11 | phase-14-news-archive | brainstorm: 提出 2-3 种方案
+- 输入：用户选择方案B
+- 输出：选定方案B：新增 news_archive.py 作为归档 helper，step4 在评分完成后 best-effort 调用 archive_articles 写入月度 JSONL；新增 archive_news.py --date 独立补跑历史日期。方案B覆盖 D-002(14A metadata+score/signals)、D-003(run_all best-effort)、D-004(独立补跑)，避免方案A的 step4 过胖，也避免方案C事件日志过重。
+
+## 2026/6/27 20:44:43 | phase-14-news-archive | brainstorm: 分段展示设计 [CONTINUED]
+- 回答：确认
+
+## 2026/6/27 20:44:43 | phase-14-news-archive | brainstorm: 分段展示设计
+- 输入：用户确认 Phase 14A 设计
+- 输出：设计确认：变更名 2026-06-27-news-archive-core；本次只做 14A 核心 JSONL 归档；新增 news_archive.py helper；step4 best-effort 调用不阻断日报；新增 archive_news.py --date 补跑；输出 /mnt/e/每日新中国/archive/articles/YYYY-MM.jsonl；正文/图片/月报留 14B/14C。
+
+## 2026/6/27 20:46:09 | phase-14-news-archive | brainstorm: HTML 原型生成
+- 输入：Phase 14A HTML 原型
+- 输出：已生成原型：.sillyspec/changes/phase-14-news-archive/prototype-2026-06-27-news-archive-core.html。内容展示 14A/14B/14C 切分、step4→news_archive 数据流、JSONL 字段、存储布局、run_all best-effort 与补跑边界。
+
+## 2026/6/27 20:48:14 | phase-14-news-archive | brainstorm: 写设计文档并自审
+- 输入：Phase 14A design + decisions
+- 输出：已写入 .sillyspec/changes/phase-14-news-archive/design.md 与 decisions.md。自审通过：覆盖 14A metadata+score/signals 归档、run_all best-effort、archive_news 补跑、Phase 13 前置依赖；明确非目标为正文/图片/月报；无生命周期契约适用。
+
+## 2026/6/27 20:51:26 | phase-14-news-archive | brainstorm: Design Grill 交叉审查
+- 输入：Design Grill for Phase 14A
+- 输出：Design Grill passed ✅。发现并修正 6 个交叉点：不修改 run_all.sh，改为 step4 内部 best-effort 触发；JSONL 新增 updated_at 并保留首次 archived_at；news_archive 不 import step4，避免循环依赖；step4 新增 build_classification_result(today) 供 run() 和 archive_news 共用；文件清单修正 run_all 不变；保留 Phase 13 前置依赖风险 R-01。新增 D-007~D-010，无 unresolved blocker。
+
+## 2026/6/27 20:53:53 | phase-14-news-archive | brainstorm: 用户确认并生成规范文件 [CONTINUED]
+- 回答：确认
+
+## 2026/6/27 20:55:43 | phase-14-news-archive | brainstorm: 用户确认并生成规范文件
+- 输入：用户确认 Phase 14A 设计
+- 输出：Phase 14A brainstorm 完成。已生成并暂存：.sillyspec/changes/phase-14-news-archive/design.md、decisions.md、proposal.md、requirements.md、tasks.md、prototype-2026-06-27-news-archive-core.html。核心：news_archive.py helper + step4 best-effort 归档 + archive_news.py 补跑；run_all.sh 不改；JSONL 月分片；正文/图片/月报留 14B/14C。

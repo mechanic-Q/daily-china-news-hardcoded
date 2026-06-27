@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Phase 14A · News Archive Core</title>
+<style>
+body{font-family:system-ui,"Microsoft YaHei",sans-serif;background:#f6f1e6;color:#1d1d1d;margin:0;padding:24px}
+.wrap{max-width:1100px;margin:auto;background:#fffdf7;border:2px solid #1d1d1d;padding:24px}
+h1{margin:0 0 6px}.sub{color:#666;margin-bottom:22px}h2{border-top:2px solid #1d1d1d;padding-top:12px;margin-top:28px;font-size:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{border:1px solid #c8beb0;background:#fbf7ee;padding:14px}
+pre{background:#eee8dc;padding:12px;border-radius:4px;white-space:pre-wrap;font-size:12px;line-height:1.45}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #c8beb0;padding:7px 9px;text-align:left}th{background:#eee8dc}.ok{color:#197d3d;font-weight:700}.warn{color:#a25a14;font-weight:700}.muted{color:#777}.flow{font-family:monospace;background:#eee8dc;padding:14px;white-space:pre;overflow:auto;font-size:12px}.pill{display:inline-block;border:1px solid #c8beb0;background:#eee8dc;border-radius:12px;padding:2px 8px;margin:2px;font-size:12px}
+</style>
+</head>
+<body><div class="wrap">
+<h1>Phase 14A · News Archive Core</h1>
+<div class="sub">所有合格新闻元数据 + 评分长期归档 · JSONL 月分片 · best-effort 接入</div>
+
+<h2>1. Phase 切分</h2>
+<table>
+<tr><th>包</th><th>内容</th><th>本次?</th><th>原因</th></tr>
+<tr><td>14A 核心归档</td><td>metadata + score/signals + selected_in_top10</td><td class="ok">Yes</td><td>最小闭环，不依赖正文抓取</td></tr>
+<tr><td>14B 正文/图片补全</td><td>body + images best-effort</td><td class="muted">后续</td><td>慢、失败率高、清洗复杂</td></tr>
+<tr><td>14C 自动月报</td><td>JSONL → Markdown 月报/统计</td><td class="muted">后续</td><td>依赖稳定 archive 数据</td></tr>
+</table>
+
+<h2>2. 数据流</h2>
+<div class="flow">Phase 13 step4
+  ├─ classify all eligible articles
+  ├─ selected = top10 for daily page
+  └─ classified = all eligible articles by column
+          │
+          ▼ best-effort
+news_archive.archive_articles(date, classified, selected)
+          │
+          ├─ normalize_url
+          ├─ id = sha1(url)
+          ├─ upsert within monthly JSONL
+          └─ write /mnt/e/每日新中国/archive/articles/YYYY-MM.jsonl
+
+Failure path:
+  archive error → print("⚠ 归档失败") → run_all continues
+
+Backfill:
+  python3 archive_news.py --date YYYY-MM-DD</div>
+
+<h2>3. JSONL Record</h2>
+<div class="grid">
+<div class="card"><h3>字段</h3>
+<span class="pill">schema_version</span><span class="pill">id</span><span class="pill">date</span><span class="pill">archived_at</span>
+<span class="pill">source</span><span class="pill">url</span><span class="pill">title</span><span class="pill">column</span>
+<span class="pill">aggregate_score</span><span class="pill">signals</span><span class="pill">selected_in_top10</span><span class="pill">score_source</span>
+</div>
+<div class="card"><h3>示例</h3><pre>{
+  "schema_version": 1,
+  "id": "sha1(normalized_url)",
+  "date": "2026-06-27",
+  "source": "新华社",
+  "url": "https://...",
+  "title": "...",
+  "column": "🤖 AI智能前沿",
+  "aggregate_score": 8.4,
+  "selected_in_top10": false,
+  "score_source": "llm",
+  "signals": {"relevance": {...}, "importance": 7, "timeliness": 5}
+}</pre></div>
+</div>
+
+<h2>4. 存储布局</h2>
+<pre>/mnt/e/每日新中国/archive/
+├── articles/
+│   ├── 2026-06.jsonl
+│   └── 2026-07.jsonl
+└── _future/
+    ├── images/      # 14B
+    └── monthly/     # 14C</pre>
+
+<h2>5. 决策边界</h2>
+<table>
+<tr><th>问题</th><th>决定</th></tr>
+<tr><td>收录范围</td><td>所有被 Phase 13 栏目规则分配的合格文章，不限 top10</td></tr>
+<tr><td>正文</td><td>14A 不存，14B 补</td></tr>
+<tr><td>图片</td><td>14A 不抓，14B best-effort</td></tr>
+<tr><td>月报</td><td>14C 生成</td></tr>
+<tr><td>run_all</td><td>默认接入；归档失败不阻断日报</td></tr>
+<tr><td>补跑</td><td>archive_news.py --date YYYY-MM-DD</td></tr>
+</table>
+</div></body></html>

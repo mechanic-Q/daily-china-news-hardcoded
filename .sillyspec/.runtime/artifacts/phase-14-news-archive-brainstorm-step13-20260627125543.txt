@@ -1,0 +1,1 @@
+Phase 14A brainstorm 完成。已生成并暂存：.sillyspec/changes/phase-14-news-archive/design.md、decisions.md、proposal.md、requirements.md、tasks.md、prototype-2026-06-27-news-archive-core.html。核心：news_archive.py helper + step4 best-effort 归档 + archive_news.py 补跑；run_all.sh 不改；JSONL 月分片；正文/图片/月报留 14B/14C。

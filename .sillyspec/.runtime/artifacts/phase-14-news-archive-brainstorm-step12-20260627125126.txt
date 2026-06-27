@@ -1,0 +1,1 @@
+Design Grill passed ✅。发现并修正 6 个交叉点：不修改 run_all.sh，改为 step4 内部 best-effort 触发；JSONL 新增 updated_at 并保留首次 archived_at；news_archive 不 import step4，避免循环依赖；step4 新增 build_classification_result(today) 供 run() 和 archive_news 共用；文件清单修正 run_all 不变；保留 Phase 13 前置依赖风险 R-01。新增 D-007~D-010，无 unresolved blocker。
