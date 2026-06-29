@@ -18,6 +18,7 @@ from news_archive import (
     infer_source, build_record,
     load_month_records, write_month_records, archive_articles,
     archive_articles_best_effort,
+    SCHEMA_VERSION, IMAGES_DIR, ARCHIVE_DIR,
 )
 
 
@@ -141,6 +142,78 @@ class TestNewsArchive(unittest.TestCase):
 
     def test_best_effort_dry_run_no_exception(self):
         archive_articles_best_effort("2026-06-27", {}, [], dry_run=True)
+
+    def test_schema_version_2(self):
+        self.assertEqual(SCHEMA_VERSION, 2)
+
+    def test_images_dir_exists(self):
+        expected = ARCHIVE_DIR / "images"
+        self.assertEqual(IMAGES_DIR, expected)
+
+    def test_build_record_schema_version_2(self):
+        article = {"url": "https://example.com/e", "title": "schema v2"}
+        record = build_record(article, "2026-06-29", set())
+        self.assertEqual(record["schema_version"], 2)
+
+    def test_archive_upsert_preserves_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "2026-06.jsonl"
+            aid = article_id("https://example.com/upsert-body")
+            preexisting = {
+                aid: {
+                    "id": aid, "url": "https://example.com/upsert-body",
+                    "title": "Old Title", "date": "2026-06-29",
+                    "body": "已有正文", "body_status": "extracted",
+                    "body_extracted_at": "2026-06-28T00:00:00",
+                    "body_source_url": "https://example.com/upsert-body",
+                    "selected_in_top10": False,
+                    "archive_status": "body-enriched",
+                    "schema_version": 2,
+                }
+            }
+            write_month_records(p, preexisting)
+            new_articles = [{"url": "https://example.com/upsert-body", "title": "New Title"}]
+            with mock.patch('news_archive.ARTICLES_DIR', Path(tmp)):
+                archive_articles(new_articles, "2026-06-29", [], dry_run=False)
+            loaded = load_month_records(p)
+            rec = loaded[aid]
+            self.assertEqual(rec["body"], "已有正文")
+            self.assertEqual(rec["body_status"], "extracted")
+            self.assertEqual(rec["title"], "New Title")
+
+    def test_archive_upsert_preserves_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "2026-06.jsonl"
+            aid = article_id("https://example.com/upsert-image")
+            preexisting = {
+                aid: {
+                    "id": aid, "url": "https://example.com/upsert-image",
+                    "title": "Old Img", "date": "2026-06-29",
+                    "image_url": "https://example.com/img.jpg",
+                    "image_path": "/mnt/e/archive/images/a.jpg",
+                    "image_status": "downloaded",
+                    "selected_in_top10": True,
+                    "archive_status": "body-image-enriched",
+                    "schema_version": 2,
+                }
+            }
+            write_month_records(p, preexisting)
+            new_articles = [{"url": "https://example.com/upsert-image", "title": "New Img"}]
+            with mock.patch('news_archive.ARTICLES_DIR', Path(tmp)):
+                archive_articles(new_articles, "2026-06-29", [], dry_run=False)
+            loaded = load_month_records(p)
+            rec = loaded[aid]
+            self.assertEqual(rec["image_url"], "https://example.com/img.jpg")
+            self.assertEqual(rec["image_path"], "/mnt/e/archive/images/a.jpg")
+            self.assertEqual(rec["image_status"], "downloaded")
+
+    def test_archive_upsert_new_record_no_body_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            articles = [{"url": "https://example.com/new", "title": "品牌"}]
+            with mock.patch('news_archive.ARTICLES_DIR', Path(tmp)):
+                new, upd = archive_articles(articles, "2026-06-29", [], dry_run=False)
+            self.assertEqual(new, 1)
+            self.assertEqual(upd, 0)
 
 
 if __name__ == "__main__":

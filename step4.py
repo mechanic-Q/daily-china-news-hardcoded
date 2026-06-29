@@ -505,6 +505,12 @@ def run(today, dry_run):
     from news_archive import archive_articles_best_effort
     archive_articles_best_effort(today_str, classified, selected, dry_run)
 
+    try:
+        import archive_enrich
+        archive_enrich.enrich_archive_best_effort(today_str, selected, dry_run=dry_run)
+    except Exception as e:
+        print(f"⚠ 归档正文/首图补全失败: {e}", file=sys.stderr)
+
 
 def main():
     today, dry_run = parse_args()

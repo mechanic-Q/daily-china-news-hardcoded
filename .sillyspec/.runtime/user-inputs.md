@@ -705,3 +705,100 @@ sillyspec run brainstorm --done --change phase-14-news-archive --input "用户�
 ## 2026/6/27 20:55:43 | phase-14-news-archive | brainstorm: 用户确认并生成规范文件
 - 输入：用户确认 Phase 14A 设计
 - 输出：Phase 14A brainstorm 完成。已生成并暂存：.sillyspec/changes/phase-14-news-archive/design.md、decisions.md、proposal.md、requirements.md、tasks.md、prototype-2026-06-27-news-archive-core.html。核心：news_archive.py helper + step4 best-effort 归档 + archive_news.py 补跑；run_all.sh 不改；JSONL 月分片；正文/图片/月报留 14B/14C。
+
+## 2026/6/29 03:58:15 | phase-14b-archive-body-images | brainstorm: 状态检查
+- 输入：用户要进行 Phase14B：归档正文 + 图片补全
+- 输出：当前变更 phase-14b-archive-body-images，阶段为 brainstorm/需求探索，Step1 状态检查通过。
+
+## 2026/6/29 03:58:40 | phase-14b-archive-body-images | brainstorm: 加载项目上下文
+- 输入：用户要进行 Phase14B：归档正文 + 图片补全
+- 输出：项目是单一 Python 新闻流水线 Daily，5 步文件接力：step1_3 采集、step4 分类归档 metadata、step6 正文提取、step7 摘要、step8 渲染。关键约定：手写 parse_args、中文 print、无 type hints、磁盘 Markdown 接力、run_all.sh set -e。Phase14B 相关模块：archiver/news_archive.py+archive_news.py，extractor/step6.py，classifier/step4.py，renderer/step8.py 可能提供图片来源。当前变更目录 phase-14b-archive-body-images，属于 Daily 单项目。
+
+## 2026/6/29 03:58:57 | phase-14b-archive-body-images | brainstorm: 协作与复用检查
+- 输入：用户要进行 Phase14B：归档正文 + 图片补全
+- 输出：发现活跃变更 default 与当前 phase-14b-archive-body-images；default 是旧 Phase13 栏目评分遗留，不与 Phase14B 重复。全局模板目录无可用模板。无冲突，继续。
+
+## 2026/6/29 03:59:05 | phase-14b-archive-body-images | brainstorm: 原型/设计图分析
+- 输入：用户未提供截图、图片或 HTML 原型
+- 输出：本变更是后端归档能力（正文 + 图片补全），无 UI 原型/设计图需要分析；跳过原型分析。
+
+## 2026/6/29 03:59:14 | phase-14b-archive-body-images | brainstorm: 需求范围评估
+- 输入：Phase14B = 归档正文 + 图片补全
+- 输出：无需拆分：本期只有一个交付包，即在 14A JSONL archive 记录基础上补充 body/images 字段并更新 archive_status；涉及 archiver 与 extractor，图片可 best-effort 作为同一记录增强。不是批量模式：虽然处理多篇文章，但本质是通用归档增强逻辑，不是逐篇开发。
+
+## 2026/6/29 04:12:56 | phase-14b-archive-body-images | brainstorm: 对话式探索 [CONTINUED]
+- 回答：B：Phase14B 最小交付范围为正文 + 首图
+
+## 2026/6/29 04:13:31 | phase-14b-archive-body-images | brainstorm: 对话式探索 [CONTINUED]
+- 回答：C：首图同时保存原始 URL 和本地文件，下载到 archive/images/ 并在 JSONL 记录本地路径
+
+## 2026/6/29 04:13:38 | phase-14b-archive-body-images | brainstorm: 对话式探索
+- 输入：用户确认：Phase14B 最小交付范围为正文 + 首图；首图同时保存原始 URL 与本地文件路径。
+- 输出：用户已确认 Phase14B 范围：在 14A JSONL archive record 上补全正文 body，并抓取首图；首图保存策略为 URL + 本地文件两者都存，图片落到 archive/images/，JSONL 记录原始 URL 和本地路径。非目标：多图、月报、搜索/查询 UI。
+
+## 2026/6/29 04:15:54 | phase-14b-archive-body-images | brainstorm: 需求澄清 Grill [CONTINUED]
+- 回答：正文：所有归档文章全量补全，必须真实可验证（只从原页面提取，禁止 LLM 生成或润色，禁止任何虚构成分）。图片：只给 top10 补首图，best-effort（有图就补，没图不补）。
+
+## 2026/6/29 13:54:21 | phase-14b-archive-body-images | brainstorm: 需求澄清 Grill [CONTINUED]
+- 回答：B：正文全量补全默认 best-effort，不阻断日报；失败或耗时过长时保留日报产出，之后通过 CLI 补跑。
+
+## 2026/6/29 13:54:33 | phase-14b-archive-body-images | brainstorm: 需求澄清 Grill
+- 输入：用户确认：所有归档文章补正文，正文必须真实可验证，只从原页面提取，禁止 LLM 生成/润色/虚构；图片只给 top10 补首图，best-effort；正文全量补全 best-effort，不阻断日报，失败可 CLI 补跑。
+- 输出：需求澄清结论：D-001 范围：Phase14B 做全量正文 + top10 首图，不做多图/月报/查询 UI。D-002 正文真实性：body 只能来自原始页面提取，禁止 LLM 生成、改写、润色或补写。D-003 图片边界：仅 selected_in_top10 的文章抓首图，保存原始 URL 与本地 archive/images 路径；无图不报错。D-004 运行策略：正文补全 best-effort，不阻断日报，失败或超时保留状态并支持 CLI 补跑。剩余风险：正文提取质量需以 source_url、extracted_at、extract_error/body_status 字段显式记录；图片 URL 解析存在站点差异，设计阶段用保守策略。
+
+## 2026/6/29 14:04:27 | phase-14b-archive-body-images | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：方案B：独立 archive_enrich.py/归档增强 helper + CLI；复用 step6.fetch_and_extract 抓真实正文；top10 首图 best-effort；run_all best-effort 触发且提供补跑。
+
+## 2026/6/29 14:04:35 | phase-14b-archive-body-images | brainstorm: 提出 2-3 种方案
+- 输入：用户选择方案B
+- 输出：用户确认方案B：新增独立 archive_enrich.py/归档增强 helper + CLI，复用 step6.fetch_and_extract 从原页面提取真实正文；仅 top10 抓首图并 best-effort 下载到 archive/images；run_all/step4 后以 best-effort 触发，不阻断日报；CLI 支持补跑缺失/失败记录。方案B覆盖 D-001 范围、D-002 正文真实性、D-003 图片边界、D-004 best-effort 运行策略。
+
+## 2026/6/29 14:06:40 | phase-14b-archive-body-images | brainstorm: 分段展示设计 [CONTINUED]
+- 回答：确认
+
+## 2026/6/29 14:06:53 | phase-14b-archive-body-images | brainstorm: 分段展示设计
+- 输入：用户确认设计方案
+- 输出：用户确认 Phase14B 设计：新增 archive_enrich.py，读写 archive/articles/YYYY-MM.jsonl；所有文章补真实正文，字段 body/body_status/body_error/body_extracted_at/body_source_url；仅 top10 补首图，字段 image_url/image_path/image_status；图片下载 archive/images/YYYY-MM/<article_id>.<ext>；run_all/step4 后 best-effort 不阻断；CLI 支持 --date --missing-only --dry-run。变更名后续可从 phase-14b-archive-body-images 规范化到 2026-06-29-archive-body-image-enrichment。
+
+## 2026/6/29 14:06:59 | phase-14b-archive-body-images | brainstorm: HTML 原型生成
+- 输入：Phase14B 是后端归档增强，无 UI
+- 输出：跳过 HTML 原型：本变更为纯后端 archive enrichment（JSONL 字段补全、正文提取、首图下载、CLI 补跑），无 UI 组件/页面布局/交互流程需要浏览器原型。后续 design.md 用数据流图和字段表表达。
+
+## 2026/6/29 14:10:03 | 2026-06-29-archive-body-image-enrichment | brainstorm: 写设计文档并自审
+- 输入：已写 design.md 与 decisions.md
+- 输出：已生成 .sillyspec/changes/2026-06-29-archive-body-image-enrichment/design.md 与 decisions.md。自审通过：覆盖全量真实正文、top10首图、URL+本地路径、best-effort不阻断、CLI补跑；保持 brownfield 兼容；非目标清晰；D-001~D-005 均被 design 追踪；不涉及生命周期契约表。
+
+## 2026/6/29 14:12:44 | 2026-06-29-archive-body-image-enrichment | brainstorm: Design Grill 交叉审查
+- 输入：Design Grill 完成
+- 输出：Design Grill passed。Cross-check：X-001 data model vs implementation：发现 schema_version 未明确，已修正为 v2；X-002 compatibility vs news_archive：发现 14A upsert 会覆盖 14B 字段，已补 D-006@v1 并要求合并保留；X-003 image extraction vs step6 contract：fetch_and_extract 不返回 HTML，已补 D-007@v1，图片流程单独抓 HTML，不改 step6 契约；X-004 run_all vs best-effort：step4 仅薄调用，archive_enrich catch all + 时间预算。无 P0/P1 unresolved blocker。
+
+## 2026/6/29 14:13:38 | 2026-06-29-archive-body-image-enrichment | brainstorm: 用户确认并生成规范文件 [CONTINUED]
+- 回答：确认
+
+## 2026/6/29 14:16:18 | 2026-06-29-archive-body-image-enrichment | brainstorm: 用户确认并生成规范文件
+- 输入：用户最终确认 Phase14B 设计，已生成规范文件
+- 输出：Phase14B brainstorm 完成。已生成并暂存：design.md、decisions.md、proposal.md、requirements.md、tasks.md；目录：.sillyspec/changes/2026-06-29-archive-body-image-enrichment/。核心规格：新增 archive_enrich.py，所有归档文章补真实正文，top10 补首图，run_all best-effort 不阻断，CLI 支持补跑，news_archive schema v2 且 14A upsert 保留 14B 字段。
+
+## 2026/6/29 14:33:54 | 2026-06-29-archive-body-image-enrichment | plan: 复杂度分类与上下文加载
+- 输入：用户要求进入 plan 阶段
+- 输出：plan_level: full
+reason: 涉及 5 个文件、10 个任务、JSONL schema v2、跨 archiver/news_archive、new archive_enrich、classifier/step4、extractor/step6、tests，并需要明确真实正文与 best-effort 兼容验收。
+estimated_files: 5
+cross_module: true
+has_schema_change: true
+has_state_machine_change: false
+needs_parallel_execution: false
+needs_human_review: false
+已加载：proposal.md、design.md、requirements.md、tasks.md、decisions.md；D-001@v1~D-007@v1 均 accepted，无 unresolved/blocking。已加载 local.yaml（build/test/lint 空，test_strategy skip，但本变更任务明确运行 python3 tests）。已加载 ARCHITECTURE.md、CONVENTIONS.md、_module-map.yaml、extractor/classifier/summarizer 模块文档；STACK.md 不存在。模块摘要：archive helper 当前不在旧 module-map（scan 陈旧），但真实代码有 news_archive.py；extractor 提供 step6.fetch_and_extract；classifier/step4 是 run_all 接入点；tests/test_news_archive.py 已存在。
+
+## 2026/6/29 14:36:20 | 2026-06-29-archive-body-image-enrichment | plan: 生成分级计划与自检
+- 输入：按 full plan 生成计划
+- 输出：已生成 .sillyspec/changes/2026-06-29-archive-body-image-enrichment/plan.md。plan_level=full；10 个任务，4 个 Wave：W1 schema/upsert 保留，W2 archive_enrich core，W3 step4 接入，W4 tests/verification。已包含任务总表、关键路径、调用点搜索记录、全局验收标准、D/FR 覆盖矩阵和自检；无 P0/P1 unresolved blocker。
+
+## 2026/6/29 14:48:15 | 2026-06-29-archive-body-image-enrichment | plan: 生成 TaskCard（子代理并行）
+- 输入：已生成 10 个 TaskCard
+- 输出：已生成 tasks/task-01.md 至 task-10.md，全部非空且 20~40 行，frontmatter 包含 id/title/author/created_at/priority/depends_on/blocks/allowed_paths，body 包含 goal/implementation/acceptance/verify/constraints。已修正 task-02/04/05/06/09 格式与长度问题；allowed_paths 与 plan.md Wave/依赖一致。
+
+## 2026/6/29 14:48:36 | 2026-06-29-archive-body-image-enrichment | plan: Wave 重排与可行性校验
+- 输入：Wave 重排与可行性校验
+- 输出：Wave 校验通过，无需重排。W1 schema/preservation → W2 archive_enrich core → W3 step4 integration → W4 tests/verification 依赖顺序正确；10 个 TaskCard 均存在、非空、20~40 行；allowed_paths 与任务范围一致；无 P0/P1 blocker。plan 阶段完成，可进入 execute。
