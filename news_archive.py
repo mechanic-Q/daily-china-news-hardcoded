@@ -17,7 +17,14 @@ from pathlib import Path
 BASE_DIR = Path("/mnt/e/每日新中国")
 ARCHIVE_DIR = BASE_DIR / "archive"
 ARTICLES_DIR = ARCHIVE_DIR / "articles"
-SCHEMA_VERSION = 1
+IMAGES_DIR = ARCHIVE_DIR / "images"
+SCHEMA_VERSION = 2
+
+__all__ = ["BASE_DIR", "ARCHIVE_DIR", "ARTICLES_DIR", "IMAGES_DIR",
+           "SCHEMA_VERSION",
+           "archive_articles", "archive_articles_best_effort",
+           "load_month_records", "write_month_records",
+           "build_record", "month_path", "article_id", "infer_source"]
 
 CST = timezone(timedelta(hours=8))
 
@@ -112,12 +119,23 @@ def archive_articles(articles, today_str, selected, dry_run=False):
     new_count = 0
     update_count = 0
 
+    BODY_IMAGE_FIELDS = [
+        'body', 'body_status', 'body_error', 'body_extracted_at', 'body_source_url',
+        'image_url', 'image_path', 'image_status', 'image_error', 'image_downloaded_at',
+    ]
+
     for a in articles:
         r = build_record(a, today_str, selected_urls)
         rid = r['id']
         if rid in existing:
             old = existing[rid]
             r['archived_at'] = old.get('archived_at', r['archived_at'])
+            for f in BODY_IMAGE_FIELDS:
+                if f in old:
+                    r[f] = old[f]
+            old_archive_status = old.get('archive_status', 'metadata-only')
+            if old_archive_status not in ('metadata-only',):
+                r['archive_status'] = old_archive_status
             existing[rid] = r
             update_count += 1
         else:
