@@ -1,7 +1,7 @@
 schema_version: 1
 project: Daily
-source_commit: 5f76a1a
-generated_at: 2026-06-26 22:30:00
+source_commit: cbc7312
+generated_at: 2026-06-29 16:22:00
 generator: sillyspec-scan
 author: lmr
 
@@ -194,6 +194,7 @@ modules:
       - classifier
     used_by:
       - summarizer
+      - archiver
     needs_review: false
     concerns: []
     review_reasons: []
@@ -273,6 +274,47 @@ modules:
       - "🟡 balance_columns O(2^n) 暴力枚举"
     review_reasons: []
 
+  archiver:
+    status: active
+    doc: modules/archiver.md
+    paths:
+      - archive_enrich.py
+      - news_archive.py
+    tags:
+      - archive
+      - enrichment
+      - body
+      - image
+    aliases:
+      - archive_enrich
+      - 归档增强
+    entrypoints:
+      - "python3 archive_enrich.py --date YYYY-MM-DD [--missing-only] [--dry-run] [--max-seconds SECONDS]"
+    main_symbols:
+      - should_enrich_body
+      - enrich_body
+      - should_enrich_image
+      - enrich_image
+      - fetch_html_for_image
+      - extract_first_image_url
+      - download_image
+      - enrich_records
+      - enrich_archive
+      - enrich_archive_best_effort
+      - parse_args
+      - SCHEMA_VERSION
+      - IMAGES_DIR
+      - ARCHIVE_DIR
+      - BODY_IMAGE_FIELDS
+    depends_on:
+      - extractor
+    used_by:
+      - classifier
+    needs_review: false
+    concerns:
+      - "正文提取依赖 step6.fetch_and_extract，若 extractor 接口变更需同步更新"
+    review_reasons: []
+
   orchestrator:
     status: active
     doc: modules/orchestrator.md
@@ -299,6 +341,7 @@ modules:
       - extractor
       - summarizer
       - renderer
+      - archiver
     used_by: []
     needs_review: false
     concerns: []

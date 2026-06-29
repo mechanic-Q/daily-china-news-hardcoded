@@ -68,6 +68,7 @@ for (title, url) in items:
 
 ## 注意事项
 - 本模块**无 LLM 调用**，纯规则提取，速度与正确性都依赖 5 层策略与污染检测的覆盖度
+- `fetch_and_extract` 同时被 archiver 模块（`archive_enrich.enrich_body`）调用用于归档正文补全；修改签名或返回值时需同步更新 archiver
 - chromium 子进程 120s 超时；超时返回空串而非异常，由上层 `len(html) < 500` 兜底跳过
 - `_aggressive_clean` 对 ckxx 系站点保持原 HTML（避免破坏 `var contentTxt` 字面量）
 - 后处理顺序敏感：先剥视频 UI → 再剥 enpproperty 时间戳尾部 → 再剥 CAS 地址尾部 → 最后空白归一与按句去重
