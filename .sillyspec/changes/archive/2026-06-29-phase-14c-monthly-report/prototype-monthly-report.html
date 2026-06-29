@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Phase 14C 月报原型 — 2026-06</title>
+<style>
+  body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f3ee; margin: 0; padding: 24px; color: #222; }
+  .page { max-width: 960px; margin: 0 auto; background: #fffdf8; border: 1px solid #d8d2c4; padding: 32px 36px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .title { font-size: 32px; font-weight: 700; text-align: center; letter-spacing: 4px; }
+  .issue { text-align: center; color: #7a6a4d; margin-top: 4px; font-size: 13px; }
+  hr.div { border: 0; border-top: 2px solid #222; margin: 16px 0 24px; }
+
+  .overview { background: #fbf6eb; border-left: 4px solid #b39656; padding: 14px 18px; font-size: 14px; line-height: 1.7; }
+  .overview .tag { display: inline-block; background: #b39656; color: #fff; padding: 1px 8px; font-size: 11px; border-radius: 2px; margin-right: 6px; }
+  .overview .src { color: #6e5d3f; font-size: 12px; }
+
+  h2 { font-size: 18px; margin: 28px 0 10px; padding-left: 8px; border-left: 4px solid #b39656; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px; }
+  .stat { background: #fbf6eb; padding: 12px; text-align: center; border: 1px dashed #c8b990; }
+  .stat .n { font-size: 22px; font-weight: 700; color: #6f5a2f; }
+  .stat .l { font-size: 12px; color: #7a6a4d; margin-top: 2px; }
+
+  .chart { background: repeating-linear-gradient(90deg,#fbf6eb 0 1px, transparent 1px 64px); height: 120px; border: 1px solid #d8d2c4; padding: 12px; font-family: monospace; font-size: 11px; color: #6e5d3f; line-height: 16px; }
+  .chart pre { margin: 0; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .col { }
+  .col h3 { font-size: 14px; margin: 12px 0 6px; color: #6f5a2f; }
+  .item { padding: 8px 0; border-bottom: 1px dotted #c8b990; font-size: 13px; }
+  .item .ttl { font-weight: 600; }
+  .item .meta { color: #7a6a4d; font-size: 11px; margin-top: 2px; }
+  .item .meta a { color: #6f5a2f; text-decoration: none; }
+  .thumb { width: 100%; height: 80px; background: linear-gradient(135deg,#e0d7be,#fbf6eb); margin-top: 6px; display: flex; align-items: center; justify-content: center; color: #b39656; font-size: 11px; }
+
+  .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #c8b990; font-size: 11px; color: #7a6a4d; text-align: center; }
+  .footer code { background: #fbf6eb; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="title">每日新中国 · 月报</div>
+  <div class="issue">2026 年 6 月 · 第二〇二六〇六期 · 共 <strong>432</strong> 条归档</div>
+  <hr class="div">
+
+  <div class="overview">
+    <span class="tag">月度总述</span>
+    本月共归档 432 条新闻，集中在 🤖 AI 智能前沿（112）、🔬 世界性科研突破（87）、⚡ 能源（54）。
+    重点信源：新华社（38%）、人民日报（21%）、央视新闻（15%）。
+    LLM 文案仅基于 archive 真实标题与正文生成，所有事实可追溯。
+    <div class="src">来源：archive/articles/2026-06.jsonl（432 条 · body 已提取 387 · 首图 78）</div>
+  </div>
+
+  <h2>① 月度统计</h2>
+  <div class="stats">
+    <div class="stat"><div class="n">432</div><div class="l">归档总数</div></div>
+    <div class="stat"><div class="n">9</div><div class="l">活跃栏目</div></div>
+    <div class="stat"><div class="n">7</div><div class="l">信源数</div></div>
+    <div class="stat"><div class="n">387</div><div class="l">正文已提取</div></div>
+  </div>
+  <div class="chart">
+    <pre>日趋势（条/日）
+06-01 ▇▇▇▇▇▇▇▇      14
+06-02 ▇▇▇▇▇▇▇▇▇▇▇▇  18
+06-03 ▇▇▇▇▇▇        12
+…   栏目分布（前 5）
+🤖 AI 智能前沿       ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇   112
+🔬 世界性科研突破     ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇            87
+⚡ 能源               ▇▇▇▇▇▇▇▇▇▇▇▇▇▇                  54</pre>
+  </div>
+
+  <h2>② 代表新闻（每栏目 Top 3）</h2>
+  <div class="cols">
+    <div class="col">
+      <h3>🔬 世界性科研突破</h3>
+      <div class="item">
+        <div class="ttl">某团队在拓扑材料中观测到新奇量子相</div>
+        <div class="meta">新华社 · 2026-06-14 · score 8.7 · <a href="#">原文</a></div>
+        <div class="thumb">[首图占位 archive/images/2026-06/&lt;id&gt;.jpg]</div>
+      </div>
+      <div class="item">
+        <div class="ttl">国产光刻关键工艺取得突破</div>
+        <div class="meta">人民日报 · 2026-06-09 · score 8.5 · <a href="#">原文</a></div>
+      </div>
+      <div class="item">
+        <div class="ttl">新型钙钛矿太阳能电池效率刷新纪录</div>
+        <div class="meta">中科院 · 2026-06-22 · score 8.1 · <a href="#">原文</a></div>
+      </div>
+
+      <h3>⚡ 能源</h3>
+      <div class="item">
+        <div class="ttl">核聚变实验装置实现长脉冲稳态运行</div>
+        <div class="meta">中核集团 · 2026-06-18 · score 8.4 · <a href="#">原文</a></div>
+      </div>
+      <div class="item">
+        <div class="ttl">海上风电单机容量再创新高</div>
+        <div class="meta">新华社 · 2026-06-05 · score 7.9 · <a href="#">原文</a></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3>🤖 AI 智能前沿</h3>
+      <div class="item">
+        <div class="ttl">国产开源大模型在多语种榜单登顶</div>
+        <div class="meta">新华社 · 2026-06-12 · score 8.6 · <a href="#">原文</a></div>
+        <div class="thumb">[首图占位 archive/images/2026-06/&lt;id&gt;.jpg]</div>
+      </div>
+      <div class="item">
+        <div class="ttl">行业大模型在工业质检场景规模化落地</div>
+        <div class="meta">人民日报 · 2026-06-20 · score 8.3 · <a href="#">原文</a></div>
+      </div>
+      <div class="item">
+        <div class="ttl">具身智能机器人完成复杂工厂任务演示</div>
+        <div class="meta">央视新闻 · 2026-06-25 · score 8.0 · <a href="#">原文</a></div>
+      </div>
+
+      <h3>🎖️ 军事</h3>
+      <div class="item">
+        <div class="ttl">新型驱逐舰入列编队</div>
+        <div class="meta">央视军事 · 2026-06-11 · score 7.6 · <a href="#">原文</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    生成器 <code>monthly_report.py</code> · 月报版式 · 输出 <code>archive/monthly/2026-06/2026-06_月报.{md,html,png}</code> + <code>2026-06_统计.json</code> · LLM grounded · article_id 全部可追溯
+  </div>
+</div>
+</body>
+</html>

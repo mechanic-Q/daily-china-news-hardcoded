@@ -1,7 +1,7 @@
 schema_version: 1
 project: Daily
-source_commit: cbc7312
-generated_at: 2026-06-29 16:22:00
+source_commit: 67748e5
+generated_at: 2026-06-29 22:01:00
 generator: sillyspec-scan
 author: lmr
 
@@ -310,9 +310,48 @@ modules:
       - extractor
     used_by:
       - classifier
+      - monthly
     needs_review: false
     concerns:
       - "正文提取依赖 step6.fetch_and_extract，若 extractor 接口变更需同步更新"
+    review_reasons: []
+
+  monthly:
+    status: active
+    doc: modules/monthly.md
+    paths:
+      - monthly_report.py
+    tags:
+      - monthly
+      - report
+      - archive
+      - llm
+    aliases:
+      - 月报
+    entrypoints:
+      - "python3 monthly_report.py --month YYYY-MM [--dry-run] [--no-llm] [--top-per-column N] [--max-llm-seconds S]"
+    main_symbols:
+      - parse_args
+      - load_month_jsonl
+      - compute_stats
+      - pick_top_per_column
+      - llm_monthly_overview
+      - sanitize_llm_text
+      - fallback_overview
+      - render_markdown
+      - render_html
+      - render_png
+      - write_outputs
+      - main
+    depends_on:
+      - archiver
+      - llm-client
+    used_by: []
+    needs_review: false
+    concerns:
+      - "关键词统计基于已有 CATEGORY_KEYWORDS 词库，不保证全面覆盖"
+      - "top-per-column 上限 10，月报长度受控"
+      - "不纳入 run_all.sh，需手动触发"
     review_reasons: []
 
   orchestrator:
