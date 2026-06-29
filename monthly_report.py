@@ -3,13 +3,12 @@ import datetime
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 import traceback
 from pathlib import Path
-
-from news_archive import ARCHIVE_DIR, ARTICLES_DIR, IMAGES_DIR
 
 try:
     from PIL import Image, ImageChops
@@ -133,9 +132,15 @@ def compute_stats(records, month):
         if d:
             by_date[d] = by_date.get(d, 0) + 1
         bs = r.get("body_status") if r.get("body_status") else "missing"
-        body_cov[bs] = body_cov.get(bs, 0) + 1
+        if bs in body_cov:
+            body_cov[bs] += 1
+        else:
+            body_cov["missing"] += 1
         img_st = r.get("image_status") if r.get("image_status") else "missing"
-        image_cov[img_st] = image_cov.get(img_st, 0) + 1
+        if img_st in image_cov:
+            image_cov[img_st] += 1
+        else:
+            image_cov["missing"] += 1
     sorted_column = dict(sorted(by_column.items(), key=lambda x: -x[1]))
     sorted_source = dict(sorted(by_source.items(), key=lambda x: -x[1]))
     sorted_date = dict(sorted(by_date.items()))
@@ -289,11 +294,7 @@ def fallback_overview(stats, picks):
     peak_count = max(stats["by_date"].values()) if stats["by_date"] else 0
     bc = stats["body_coverage"]
     img_cov = stats["image_coverage"]
-    overview = (
-        f"\u672c\u6708\u5171\u5f52\u6863432{f'{total}\u6761'}, "
-        f"\u805a\u7126\u5728 {cols_str}\u3002"
-        f"\u4e3b\u8981\u4fe1\u6e90\uff1a{srcs_str}\u3002"
-    )
+    overview = f"\u672c\u6708\u5171\u5f52\u6863{total}\u6761, \u805a\u7126\u5728 {cols_str}\u3002\u4e3b\u8981\u4fe1\u6e90\uff1a{srcs_str}\u3002"
     trend = (
         f"\u65e5\u8d8b\u52bf\u5cf0\u503c {peak_count}\u6761/{dates[-1] if dates else ''}, "
         f"body\u8986\u76d6\u7387 {bc.get('extracted',0)}/{total}, "
@@ -342,10 +343,10 @@ def render_markdown(month, stats, picks, overview):
 
 def render_html(month, stats, picks, overview):
     md = render_markdown(month, stats, picks, overview)
-    esc = html.escape(md.replace("\n", "<br>\n"))
+    esc = html.escape(md).replace("\n", "<br>\n")
     return f"""<!DOCTYPE html><html lang=zh-CN><meta charset=utf-8><title>\u6708\u62a5 {month}</title>
 <body style="max-width:960px;margin:0 auto;background:#f5f3ee;padding:20px">
-<div style=background:#fffdf8;padding:32px;border:1px solid #d8d2c4>
+<div style="background:#fffdf8;padding:32px;border:1px solid #d8d2c4">
 {esc}
 </div></body></html>"""
 
