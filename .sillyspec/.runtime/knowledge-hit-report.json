@@ -1,7 +1,36 @@
 {
   "matched": true,
-  "entry_count": 4,
+  "entry_count": 10,
   "entries": [
+    {
+      "file": "conventions.md",
+      "anchor": "输出目录规范",
+      "keywords": [
+        "输出",
+        "目录",
+        "BASE_DIR",
+        "路径",
+        "0新闻",
+        "1新闻",
+        "2新闻",
+        "3新闻"
+      ],
+      "category": "Conventions"
+    },
+    {
+      "file": "conventions.md",
+      "anchor": "llm-调用约定",
+      "keywords": [
+        "LLM",
+        "openai",
+        "SDK",
+        "base_url",
+        "api_key",
+        "zhipu",
+        "minimax"
+      ],
+      "category": "Conventions"
+    },
     {
       "file": "conventions.md",
       "anchor": "分支策略",
@@ -15,25 +44,74 @@
     },
     {
       "file": "patterns.md",
-      "anchor": "多层提取策略链-layered-extraction-chain",
+      "anchor": "文件接力模式-file-relay",
       "keywords": [
-        "extract_body",
-        "5层",
-        "多层",
-        "提取",
-        "extraction",
-        "chain"
+        "文件接力",
+        "file relay",
+        "markdown",
+        "管道",
+        "接口契约"
+      ],
+      "category": "Patterns"
+    },
+    {
+      "file": "patterns.md",
+      "anchor": "三级回退判定模式-three-tier-fallback",
+      "keywords": [
+        "涉华",
+        "three-tier",
+        "回退",
+        "fallback",
+        "domain",
+        "keyword",
+        "LLM"
+      ],
+      "category": "Patterns"
+    },
+    {
+      "file": "patterns.md",
+      "anchor": "chromium-双通道抓取-dual-channel-fetch",
+      "keywords": [
+        "chromium",
+        "dump-dom",
+        "抓取",
+        "双通道",
+        "fetch"
+      ],
+      "category": "Patterns"
+    },
+    {
+      "file": "patterns.md",
+      "anchor": "openai-兼容客户端-openai-compatible-client",
+      "keywords": [
+        "OpenAI 兼容",
+        "openai SDK",
+        "base_url",
+        "provider",
+        "zhipu",
+        "minimax",
+        "9router"
       ],
       "category": "Patterns"
     },
     {
       "file": "known-issues.md",
-      "anchor": "-信源-url正则硬编码",
+      "anchor": "-base_dir-硬编码",
       "keywords": [
-        "信源",
-        "URL",
+        "BASE_DIR",
         "硬编码",
-        "配置"
+        "路径",
+        "不可移植"
+      ],
+      "category": "Known Issues"
+    },
+    {
+      "file": "known-issues.md",
+      "anchor": "-chromium-snap-路径",
+      "keywords": [
+        "snap",
+        "chromium",
+        "路径"
       ],
       "category": "Known Issues"
     },

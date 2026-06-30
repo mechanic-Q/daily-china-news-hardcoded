@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,6 +33,8 @@ COLUMN_ORDER = [
     '🧱 材料',
     '🎖️ 军事',
 ]
+
+STEP7_MAX_WORKERS = 3
 
 
 def parse_args():
@@ -191,6 +194,15 @@ def llm_summarize(title, body):
     return None
 
 
+def summarize_article_worker(index, article):
+    summary = llm_summarize(article['title'], article['body'])
+    fallback = False
+    if not summary:
+        summary = fallback_summarize(article['title'], article['body'])
+        fallback = True
+    return index, summary, fallback
+
+
 def run(today, dry_run):
     today_str = today.strftime("%Y-%m-%d")
     path_1 = BASE_DIR / today_str / "1新闻_链接.md"
@@ -221,18 +233,19 @@ def run(today, dry_run):
 
     print(f"共 {len(matched)} 条，正在生成摘要...\n")
 
-    for i, a in enumerate(matched):
-        summary = llm_summarize(a["title"], a["body"])
-        if not summary:
-            summary = fallback_summarize(a["title"], a["body"])
-            a["fallback"] = True
-        else:
-            a["fallback"] = False
-        a["summary"] = summary
-        fb = "⚡" if a["fallback"] else "✅"
+    with ThreadPoolExecutor(max_workers=STEP7_MAX_WORKERS) as executor:
+        futures = {executor.submit(summarize_article_worker, idx, a): idx for idx, a in enumerate(matched)}
+        results = {}
+        for future in as_completed(futures):
+            idx, summary, fallback = future.result()
+            results[idx] = (summary, fallback)
+
+    for idx, a in enumerate(matched):
+        summary, fallback = results.get(idx, ("", True))
+        a["summary"] = summary or ""
+        a["fallback"] = fallback
+        fb = "⚡" if fallback else "✅"
         print(f"  {fb} [{a['src']}] {a['title'][:40]}... ({len(a['summary'])}字)")
-        if not a["fallback"] and i < len(matched) - 1:
-            time.sleep(0.5)
 
     success = sum(1 for a in matched if not a["fallback"])
     print(f"\nAPI成功: {success}/{len(matched)}  规则回退: {len(matched) - success}")

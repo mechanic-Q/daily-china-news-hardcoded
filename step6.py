@@ -17,6 +17,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_DIR = Path("/mnt/e/每日新中国")
 CHROMIUM = "/snap/bin/chromium"
@@ -26,6 +27,8 @@ ssl_ctx.verify_mode = ssl.CERT_NONE
 
 EXCLUDE_PARAS = ['copyright', 'icp', '京ICP', '沪ICP', '登录', '注册',
                  '央视网', '二维码', '责编', '责任编辑', '温馨提示']
+
+STEP6_MAX_WORKERS = 4
 
 
 def parse_args():
@@ -231,6 +234,11 @@ def fetch_and_extract(url, title):
         return None, str(e)
 
 
+def extract_article_worker(index, article):
+    body, err = fetch_and_extract(article['url'], article['title'])
+    return index, body, err
+
+
 def run(today, dry_run):
     today_str = today.strftime("%Y-%m-%d")
     input_path = BASE_DIR / today_str / "1新闻_链接.md"
@@ -250,9 +258,16 @@ def run(today, dry_run):
 
     print(f"共 {len(articles)} 条，提取正文中...\n")
 
+    with ThreadPoolExecutor(max_workers=STEP6_MAX_WORKERS) as executor:
+        futures = {executor.submit(extract_article_worker, idx, a): idx for idx, a in enumerate(articles)}
+        results = {}
+        for future in as_completed(futures):
+            idx, body, err = future.result()
+            results[idx] = (body, err)
+
     success = 0
-    for a in articles:
-        body, err = fetch_and_extract(a['url'], a['title'])
+    for idx, a in enumerate(articles):
+        body, err = results.get(idx, (None, "unknown"))
         a['body'] = body or f'[正文提取失败: {err or "未知错误"}]'
         status = '✅' if body else '❌'
         print(f"  {status} [{a['src']}] {a['title'][:40]}... ({len(a['body'])}字)")

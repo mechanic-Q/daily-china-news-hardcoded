@@ -1,0 +1,65 @@
+<!--
+author: lmr
+created_at: 2026-06-30 01:23:49
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Phase15 Perf Optimize Prototype</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 32px; background: #f7f7f4; color: #202020; }
+    h1 { margin-bottom: 8px; }
+    .note { color: #666; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px #0001; }
+    .flow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; line-height: 1.5; background: #111; color: #d8f3dc; padding: 16px; border-radius: 8px; overflow: auto; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e7f5ff; color: #0b7285; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Phase15 性能优化：step6 + step7 并发</h1>
+  <div class="note">范围锁定：不改 step1_3 / step4 / step8 / run_all.sh，不改产物语义。</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Step6 正文提取 <span class="badge">ThreadPoolExecutor</span></h2>
+      <div class="flow">1新闻_链接.md
+   │ parse articles
+   ▼
+[article 1] ─┐
+[article 2] ─┼─ worker pool max=4 ─ fetch_and_extract
+[article 3] ─┘
+   │ preserve original order
+   ▼
+2新闻_已审核.md</div>
+    </div>
+
+    <div class="card">
+      <h2>Step7 摘要生成 <span class="badge">ThreadPoolExecutor</span></h2>
+      <div class="flow">1新闻_链接.md + 2新闻_已审核.md
+   │ match by title key
+   ▼
+[matched 1] ─┐
+[matched 2] ─┼─ worker pool max=3 ─ llm_summarize
+[matched 3] ─┘                    └ fallback_summarize
+   │ preserve category/order
+   ▼
+3新闻_概述.md</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <h2>不变量与验收</h2>
+    <table>
+      <tr><th>项目</th><th>要求</th></tr>
+      <tr><td>文件契约</td><td>输入/输出文件名与 Markdown 格式不变</td></tr>
+      <tr><td>失败语义</td><td>单篇失败回填错误或 fallback，不阻断全局</td></tr>
+      <tr><td>顺序</td><td>并发完成后按原列表顺序写回</td></tr>
+      <tr><td>性能</td><td>perf_profile.py 前后对比 step6 + step7 耗时下降</td></tr>
+    </table>
+  </div>
+</body>
+</html>
