@@ -1,7 +1,7 @@
 schema_version: 1
 project: Daily
 source_commit: 67748e5
-generated_at: 2026-06-29 22:01:00
+generated_at: 2026-07-02 01:33:35
 generator: sillyspec-scan
 author: lmr
 
@@ -175,6 +175,7 @@ modules:
       - regex
       - chromium
       - 5-layer
+      - trafilatura
     aliases:
       - step6
       - 正文提取器
@@ -186,17 +187,25 @@ modules:
       - chromium_dom
       - fetch_html_static
       - extract_body
+      - _extract_ckxx_content_txt
       - _preprocess_html
       - _postprocess_text
+      - SITE_POSTPROCESS
+      - _people_postprocess
+      - _cas_postprocess
+      - _cctv_postprocess
       - _is_contaminated
       - needs_chromium
+      - fetch_and_extract
     depends_on:
       - classifier
     used_by:
       - summarizer
       - archiver
     needs_review: false
-    concerns: []
+    concerns:
+      - "正文依赖 trafilatura，对 JS 字面量正文页（ckxx）保留 contentTxt fallback"
+      - "CAS postprocess 对页眉清理不完整，正文可能混入导航噪声"
     review_reasons: []
 
   summarizer:
