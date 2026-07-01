@@ -12,56 +12,14 @@ Step 6: 正文提取 — 从 1新闻_链接.md 提取正文，输出 2新闻_已
 import datetime
 import html
 import re
-import ssl
-import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
-BASE_DIR = Path("/mnt/e/每日新中国")
-CHROMIUM = "/snap/bin/chromium"
-ssl_ctx = ssl.create_default_context()
-ssl_ctx.check_hostname = False
-ssl_ctx.verify_mode = ssl.CERT_NONE
+from daily.common import BASE_DIR, parse_common_args as parse_args
+from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom, _preprocess_html
 
 EXCLUDE_PARAS = ['copyright', 'icp', '京ICP', '沪ICP', '登录', '注册',
                  '央视网', '二维码', '责编', '责任编辑', '温馨提示']
-
-
-def parse_args():
-    dry = "--dry-run" in sys.argv
-    date_str = None
-    for i, a in enumerate(sys.argv):
-        if a == "--date" and i + 1 < len(sys.argv):
-            date_str = sys.argv[i + 1]
-    if date_str:
-        try:
-            dt = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            print(f"错误: 日期格式无效: {date_str}")
-            sys.exit(1)
-    else:
-        dt = datetime.date.today()
-    return dt, dry
-
-
-def chromium_dom(url, timeout=45, budget=30000):
-    r = subprocess.run(
-        [CHROMIUM, "--headless=new", "--disable-gpu",
-         f"--virtual-time-budget={budget}", "--dump-dom", url],
-        capture_output=True, text=True, timeout=timeout)
-    return r.stdout
-
-
-def fetch_html_static(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    return urllib.request.urlopen(req, timeout=12, context=ssl_ctx).read().decode("utf-8", errors="replace")
-
-
-def _preprocess_html(html):
-    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.I | re.S)
-    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.I | re.S)
-    return html
 
 
 def extract_body(html, url):

@@ -8,45 +8,13 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from daily.common import BASE_DIR, COLUMN_ORDER, WEEKDAYS, parse_common_args as parse_args
 
 try:
     from PIL import Image, ImageChops
 except ImportError:
     Image = None
     ImageChops = None
-
-BASE_DIR = Path("/mnt/e/每日新中国")
-
-COLUMN_ORDER = [
-    '🔬 世界性科研突破',
-    '🤖 AI智能前沿',
-    '🌾 农业',
-    '🤝 扶贫',
-    '⚡ 能源',
-    '🏥 医疗',
-    '🚀 科技',
-    '🧱 材料',
-    '🎖️ 军事',
-]
-
-WEEKDAYS = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
-
-
-def parse_args():
-    dry = "--dry-run" in sys.argv
-    date_str = None
-    for i, a in enumerate(sys.argv):
-        if a == "--date" and i + 1 < len(sys.argv):
-            date_str = sys.argv[i + 1]
-    if date_str:
-        try:
-            dt = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            print(f"错误: 日期格式无效: {date_str}")
-            sys.exit(1)
-    else:
-        dt = datetime.date.today()
-    return dt, dry
 
 
 def parse_md(md_path):

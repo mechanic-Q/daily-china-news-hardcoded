@@ -11,45 +11,20 @@ Step 1-3 硬编码版：《每日新中国》新闻采集 + 三淘汰验证
 
 import asyncio
 import aiohttp
-import datetime
-import re
-import ssl
-import subprocess
-import sys
+import html as html_lib
 import json
+import re
+import sys
 import time
-import urllib.request
-from pathlib import Path
+from urllib.request import Request, urlopen
 
-# ── 全局配置 ────────────────────────────────────────────
-BASE_DIR = Path("/mnt/e/每日新中国")
-CHROMIUM = "/snap/bin/chromium"  # snap chromium v147
-
-ssl_ctx = ssl.create_default_context()
-ssl_ctx.check_hostname = False
-ssl_ctx.verify_mode = ssl.CERT_NONE
+from daily.common import BASE_DIR, parse_common_args as parse_args
+from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom
 
 
 # ============================================================
 # Step 1+2: 日期确认 + 工作目录
 # ============================================================
-
-def parse_args():
-    dry = "--dry-run" in sys.argv
-    date_str = None
-    for i, a in enumerate(sys.argv):
-        if a == "--date" and i + 1 < len(sys.argv):
-            date_str = sys.argv[i + 1]
-    if date_str:
-        try:
-            dt = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            print(f"错误: 日期格式无效: {date_str}，应为 YYYY-MM-DD")
-            sys.exit(1)
-    else:
-        dt = datetime.date.today()
-    return dt, dry
-
 
 def init(today):
     """Step 1: 日期确认 → Step 2: 建目录"""
@@ -66,14 +41,27 @@ def init(today):
 # 工具函数
 # ============================================================
 
-def chromium_dom(url, timeout=35, budget=20000):
-    """chromium --dump-dom 获取页面 DOM"""
-    r = subprocess.run(
-        [CHROMIUM, "--headless=new", "--disable-gpu",
-         f"--virtual-time-budget={budget}", "--dump-dom", url],
-        capture_output=True, text=True, timeout=timeout
-    )
-    return r.stdout
+def fetch_home_html(url):
+    try:
+        html = fetch_html_static(url)
+        if html:
+            return html
+    except Exception:
+        pass
+    return chromium_dom(url)
+
+
+def clean_anchor_text(raw):
+    text = re.sub(r'<[^>]+>', '', raw)
+    text = html_lib.unescape(text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def fetch_url_title(url):
+    try:
+        return fetch_title(fetch_html_static(url, timeout=10))
+    except Exception:
+        return ""
 
 
 def fetch_title(html):
@@ -106,18 +94,20 @@ async def http_200_async(session, url):
 # ============================================================
 
 def fetch_xinhuanet(today):
-    """新华社: chromium --dump-dom news.cn → 正则 YYYYMMDD/c.html"""
+    """新华社: news.cn 首页 → 正则 YYYYMMDD/c.html"""
     today8 = today.strftime("%Y%m%d")
-    html = chromium_dom("https://www.news.cn/", budget=25000)
+    html = fetch_home_html("https://www.news.cn/")
+    anchor_titles = {}
+    for href, raw in re.findall(r'<a[^>]+href=["\']([^"\']*news\.cn[^"\']*' + today8 + r'[^"\']*c\.html)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE):
+        title = clean_anchor_text(raw)
+        if title and len(title) > 4:
+            anchor_titles.setdefault(href, title)
     urls = list(dict.fromkeys(
         re.findall(rf'https?://[^"\'\s]*news\.cn/[^"\'\s]*/{today8}/[a-z0-9]+/c\.html', html)
     ))
     results = []
     for u in urls:
-        t = fetch_title(urllib.request.urlopen(
-            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}),
-            timeout=10, context=ssl_ctx
-        ).read().decode("utf-8", errors="replace"))
+        t = anchor_titles.get(u) or fetch_url_title(u)
         if t:
             results.append({"url": u, "title": t})
     return results
@@ -134,11 +124,11 @@ def fetch_ckxx(today):
     for alias in aliases:
         url = f"https://china.cankaoxiaoxi.com/json/channel/{alias}/list.json?_t={ts}"
         try:
-            req = urllib.request.Request(url, headers={
+            req_ = Request(url, headers={
                 "User-Agent": "Mozilla/5.0",
                 "Referer": "https://china.cankaoxiaoxi.com/"
             })
-            data = json.loads(urllib.request.urlopen(req, timeout=8, context=ssl_ctx).read())
+            data = json.loads(urlopen(req_, timeout=8, context=ssl_ctx).read())
         except Exception as e:
             print(f"    频道 {alias} 失败: {e}")
             continue
@@ -163,30 +153,30 @@ def fetch_ckxx(today):
 
 
 def fetch_cctv_news(today):
-    """央视新闻: chromium --dump-dom → 从首页 DOM 提取 (URL, title) 对"""
+    """央视新闻: 首页 DOM 提取 (URL, title) 对"""
     today_path = today.strftime("%Y/%m/%d")
-    html = chromium_dom("https://news.cctv.com/", budget=20000)
-    links = re.findall(r'href=["\']([^"\']+)["\']>([^<]{8,60})<', html)
+    html = fetch_home_html("https://news.cctv.com/")
+    links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
     results = []
     seen = set()
     for l, t_raw in links:
-        if "news.cctv.com" not in l or today_path not in l or ".shtml" not in l:
+        if "cctv.com" not in l or today_path not in l or ".shtml" not in l:
             continue
         u = l if l.startswith("http") else f"https:{l}" if l.startswith("//") else f"https://news.cctv.com{l}"
         if u in seen:
             continue
         seen.add(u)
-        t = t_raw.strip()
+        t = clean_anchor_text(t_raw) or fetch_url_title(u)
         if t and len(t) > 4:
             results.append({"url": u, "title": t})
     return results
 
 
 def fetch_cctv_military(today):
-    """央视军事: chromium --dump-dom → 从首页 DOM 提取 (URL, title) 对"""
+    """央视军事: 首页 DOM 提取 (URL, title) 对"""
     today_path = today.strftime("%Y/%m/%d")
-    html = chromium_dom("https://military.cctv.com/", budget=15000)
-    links = re.findall(r'href=["\']([^"\']+)["\']>([^<]{8,60})<', html)
+    html = fetch_home_html("https://military.cctv.com/")
+    links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
     results = []
     seen = set()
     for l, t_raw in links:
@@ -196,7 +186,7 @@ def fetch_cctv_military(today):
         if u in seen:
             continue
         seen.add(u)
-        t = t_raw.strip()
+        t = clean_anchor_text(t_raw) or fetch_url_title(u)
         if t and len(t) > 4:
             results.append({"url": u, "title": t})
     return results
@@ -204,9 +194,7 @@ def fetch_cctv_military(today):
 
 def fetch_cas(today):
     """中科院: urllib 首页 → 匹配 YYYYMM 前缀（兼容 tYYYYMMDD_* 和 /YYYYMM/ 格式）"""
-    req = urllib.request.Request("https://www.cas.cn/", headers={"User-Agent": "Mozilla/5.0"})
-    html = urllib.request.urlopen(req, timeout=15, context=ssl_ctx).read().decode("utf-8", errors="replace")
-    # 匹配 //www.cas.cn/../../ 后的所有含 YYYYMM 前缀的链接
+    html = fetch_html_static("https://www.cas.cn/", timeout=15)
     yyyymm = today.strftime("%Y%m")
     raw_urls = re.findall(rf'//www\.cas\.cn/\.\./\.\./([^"\'\s]*{yyyymm}[^"\'\s]*\.shtml)', html)
     results = []
@@ -217,26 +205,23 @@ def fetch_cas(today):
         if u in seen:
             continue
         seen.add(u)
-        t = fetch_title(urllib.request.urlopen(
-            urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}),
-            timeout=10, context=ssl_ctx
-        ).read().decode("utf-8", errors="replace"))
+        t = fetch_title(fetch_html_static(u, timeout=10))
         if t:
             results.append({"url": u, "title": t})
     return results
 
 
 def fetch_cnnc_chromium(today):
-    """中核集团 → 方案1: chromium --dump-dom cnnc.com.cn"""
-    today8 = today.strftime("%Y%m%d")
-    html = chromium_dom("https://www.cnnc.com.cn/", budget=25000)
+    """中核集团 → 方案1: cnnc.com.cn"""
+    html = fetch_home_html("https://www.cnnc.com.cn/")
     links_titles = re.findall(
-        r'<a[^>]+href=["\']([^"\']*cnnc[^"\']*202[56]\d{4}[^"\']*)["\'][^>]*>([^<]{4,60})<',
-        html
+        r'<a[^>]+href=["\']([^"\']*cnnc[^"\']*202[56]\d{4}[^"\']*)["\'][^>]*>(.*?)</a>',
+        html,
+        re.DOTALL | re.IGNORECASE
     )
     results = []
     for href, title in links_titles[:8]:
-        t = title.strip()
+        t = clean_anchor_text(title)
         if t and len(t) > 3:
             u = href if href.startswith("http") else f"https://www.cnnc.com.cn{href}"
             results.append({"url": u, "title": t})
@@ -245,24 +230,15 @@ def fetch_cnnc_chromium(today):
 
 def fetch_cnnc_cnnpn(today):
     """中核集团 → 方案2: cnnpn.cn 聚合站（CF 绕过）"""
-    html = chromium_dom("https://www.cnnpn.cn/", budget=20000)
-    today_str = today.strftime("%Y-%m-%d")
-    # 提取文章链接
+    html = fetch_home_html("https://www.cnnpn.cn/")
     links = re.findall(r'href=["\']([^"\']*cnnpn\.cn[^"\']*article[^"\']*)["\']', html)
     links = list(dict.fromkeys(links))
     results = []
     for l in links[:8]:
         u = l if l.startswith("http") else f"https://www.cnnpn.cn{l}" if l.startswith("/") else f"https://www.cnnpn.cn/{l}"
-        try:
-            h = urllib.request.urlopen(
-                urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}),
-                timeout=10, context=ssl_ctx
-            ).read().decode("utf-8", errors="replace")
-            t = fetch_title(h)
-            if t and len(t) > 4:
-                results.append({"url": u, "title": t})
-        except Exception:
-            continue
+        t = fetch_url_title(u)
+        if t and len(t) > 4:
+            results.append({"url": u, "title": t})
     return results
 
 
@@ -290,8 +266,7 @@ def fetch_rmrb(today):
     for node in range(1, 10):
         layout_url = f"https://paper.people.com.cn/rmrb/pc/layout/{today.strftime('%Y%m')}/{today.strftime('%d')}/node_{node:02d}.html"
         try:
-            req = urllib.request.Request(layout_url, headers={"User-Agent": "Mozilla/5.0"})
-            html = urllib.request.urlopen(req, timeout=10, context=ssl_ctx).read().decode("utf-8", errors="replace")
+            html = fetch_html_static(layout_url, timeout=10)
         except Exception:
             continue
         hrefs = re.findall(r'href=["\']([^"\']*content_\d+\.html)["\']', html)
@@ -302,10 +277,7 @@ def fetch_rmrb(today):
                 continue
             seen.add(u)
             try:
-                h = urllib.request.urlopen(
-                    urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}),
-                    timeout=10, context=ssl_ctx
-                ).read().decode("utf-8", errors="replace")
+                h = fetch_html_static(u, timeout=10)
                 t = fetch_title(h)
                 if t:
                     results.append({"url": u, "title": t})
@@ -397,10 +369,10 @@ def write_0(today, entries, dry_run):
 
 # 7信源定义: (名称, fetcher, 工具名)
 SOURCES = [
-    ("新华社",    fetch_xinhuanet,    "chromium --dump-dom news.cn"),
+    ("新华社",    fetch_xinhuanet,    "urllib 首页 + chromium 降级"),
     ("参考消息",  fetch_ckxx,         "urllib JSON API"),
-    ("央视新闻",  fetch_cctv_news,    "chromium --dump-dom cctv"),
-    ("央视军事",  fetch_cctv_military,"chromium --dump-dom military"),
+    ("央视新闻",  fetch_cctv_news,    "urllib 首页 + chromium 降级"),
+    ("央视军事",  fetch_cctv_military,"urllib 首页 + chromium 降级"),
     ("中科院",    fetch_cas,          "urllib cas.cn"),
     ("中核集团",  fetch_cnnc,         "降级链"),
     ("人民日报",  fetch_rmrb,         "urllib 版面索引"),

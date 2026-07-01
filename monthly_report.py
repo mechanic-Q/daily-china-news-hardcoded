@@ -16,29 +16,18 @@ except ImportError:
     Image = None
     ImageChops = None
 
-ARCHIVE_DIR = Path("/mnt/e/每日新中国/archive")
+from daily.common import BASE_DIR, COLUMN_ORDER, CST
+
+ARCHIVE_DIR = BASE_DIR / "archive"
 ARTICLES_DIR = ARCHIVE_DIR / "articles"
 IMAGES_DIR = ARCHIVE_DIR / "images"
 MONTHLY_DIR = ARCHIVE_DIR / "monthly"
-CST = datetime.timezone(datetime.timedelta(hours=8))
 DEFAULT_TOP_PER_COLUMN = 3
 DEFAULT_MAX_LLM_SECONDS = 30
 LLM_MODEL = "glm-4-flash"
 LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/"
 OVERVIEW_MAX_CHARS = 700
 BODY_SNIPPET_CHARS = 300
-
-COLUMN_ORDER = [
-    "\U0001f52c \u4e16\u754c\u6027\u79d1\u7814\u7a81\u7834",
-    "\U0001f916 AI\u667a\u80fd\u524d\u6cbf",
-    "\U0001f33c \u519c\u4e1a",
-    "\U0001f91d \u6276\u8d2b",
-    "\u26a1 \u80fd\u6e90",
-    "\U0001f3e5 \u533b\u7597",
-    "\U0001f680 \u79d1\u6280",
-    "\U0001f9f1 \u6750\u6599",
-    "\U0001f396\ufe0f \u519b\u4e8b",
-]
 
 
 def parse_args():
