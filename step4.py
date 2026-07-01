@@ -17,19 +17,7 @@ from pathlib import Path
 
 from llm_client import call_llm, LLMCallError
 
-BASE_DIR = Path("/mnt/e/每日新中国")
-
-COLUMN_ORDER = [
-    '🔬 世界性科研突破',
-    '🤖 AI智能前沿',
-    '🌾 农业',
-    '🤝 扶贫',
-    '⚡ 能源',
-    '🏥 医疗',
-    '🚀 科技',
-    '🧱 材料',
-    '🎖️ 军事',
-]
+from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, detect_source
 
 WORLD_CLASS_THRESHOLD = 7
 WORLD_CLASS_CATEGORY = '🔬 世界性科研突破'
@@ -109,23 +97,6 @@ def llm_is_china_related(title):
         import traceback
         traceback.print_exc()
         return False
-
-
-def parse_args():
-    dry = "--dry-run" in sys.argv
-    date_str = None
-    for i, a in enumerate(sys.argv):
-        if a == "--date" and i + 1 < len(sys.argv):
-            date_str = sys.argv[i + 1]
-    if date_str:
-        try:
-            dt = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            print(f"错误: 日期格式无效: {date_str}")
-            sys.exit(1)
-    else:
-        dt = datetime.date.today()
-    return dt, dry
 
 
 def parse_0(path, today):
@@ -280,24 +251,6 @@ def priority_score(title, category):
     scores = score_all_categories(title)
     score += scores.get(category, 0)
     return score
-
-
-def detect_source(url):
-    if 'cankaoxiaoxi' in url or 'ckxxapp' in url:
-        return '参考消息'
-    if 'military.cctv' in url:
-        return '央视军事'
-    if 'news.cctv' in url:
-        return '央视新闻'
-    if 'cas.cn' in url:
-        return '中科院'
-    if 'cnnpn.cn' in url or 'cnnc.com' in url:
-        return '中核集团'
-    if 'people.com.cn' in url:
-        return '人民日报'
-    if 'news.cn' in url or 'xinhuanet' in url:
-        return '新华社'
-    return '综合'
 
 
 def _validate_signals(signals):

@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-BASE_DIR = Path("/mnt/e/每日新中国")
+from daily.common import BASE_DIR
 STEPS = ["step1_3.py", "step4.py", "step6.py", "step7.py", "step8.py"]
 
 def parse_args():
