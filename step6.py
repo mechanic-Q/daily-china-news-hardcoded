@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from daily.common import BASE_DIR, parse_common_args as parse_args
 from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom, _preprocess_html
+from trafilatura import extract as tf_extract
 
 EXCLUDE_PARAS = ['copyright', 'icp', '京ICP', '沪ICP', '登录', '注册',
                  '央视网', '二维码', '责编', '责任编辑', '温馨提示']
@@ -25,73 +26,62 @@ EXCLUDE_PARAS = ['copyright', 'icp', '京ICP', '沪ICP', '登录', '注册',
 STEP6_MAX_WORKERS = 4
 
 
-def extract_body(html, url):
-    """5 层策略链正文提取"""
-
-    # Layer 1: TRS_Editor (safe to strip script/style — content in normal HTML)
-    html_clean = _preprocess_html(html)
-    m = re.search(r'<div[^>]*class=["\']TRS_Editor["\'][^>]*>(.*?)</div>', html_clean, re.I | re.S)
+def _extract_ckxx_content_txt(html):
+    m = re.search(r'var contentTxt\s*=\s*"(.*)";\s*var', html, re.S)
     if m:
-        text = re.sub(r'<[^>]+>', '', m.group(1))
+        raw = m.group(1).replace('\\"', '"').replace('\\/', '/')
+        text = re.sub(r'<[^>]+>', '', raw)
         text = re.sub(r'\s+', ' ', text).strip()
-        if len(text) > 100:
+        if len(text) > 200:
             return text
-
-    for pat in [
-        r'<article[^>]*>(.*?)</article>',
-        r'<div[^>]*class=["\']article-content["\'][^>]*>(.*?)</div>',
-        r'<div[^>]*class=["\']content["\'][^>]*>(.*?)</div>',
-        r'<div[^>]*class=["\']detail["\'][^>]*>(.*?)</div>',
-        r'<div[^>]*class=["\']main-content["\'][^>]*>(.*?)</div>',
-        r'<div[^>]*id=["\']ozoom["\'][^>]*>(.*?)</div>',
-    ]:
-        m = re.search(pat, html_clean, re.I | re.S)
-        if m:
-            text = re.sub(r'<[^>]+>', '', m.group(1))
-            text = re.sub(r'\s+', ' ', text).strip()
-            if len(text) > 100:
-                return text
-
-    if 'ckxxapp' in url or 'cankaoxiaoxi' in url:
-        m = re.search(r'var contentTxt\s*=\s*"(.*)";\s*var', html, re.S)
-        if m:
-            raw = m.group(1).replace('\\"', '"').replace('\\/', '/')
-            text = re.sub(r'<[^>]+>', '', raw)
+    for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京', '参考消息网']:
+        idx = html.find(kw)
+        if idx > 0:
+            end = idx + 200
+            for marker in ['责任编辑', '";', '编译/']:
+                pos = html[idx:].find(marker)
+                if pos > -1:
+                    cand = idx + pos + len(marker)
+                    if cand > end:
+                        end = cand
+            snippet = html[idx:end] if end > 0 else html[idx:idx + 5000]
+            text = re.sub(r'<[^>]+>', ' ', snippet)
             text = re.sub(r'\s+', ' ', text).strip()
             if len(text) > 200:
                 return text
-        for kw in ['据美国《', '据路透社', '据法新社', '据新华社', '报道称', '北京', '参考消息网']:
-            idx = html.find(kw)
-            if idx > 0:
-                end = idx + 200
-                for marker in ['责任编辑', '";', '编译/']:
-                    pos = html[idx:].find(marker)
-                    if pos > -1:
-                        cand = idx + pos + len(marker)
-                        if cand > end:
-                            end = cand
-                snippet = html[idx:end] if end > 0 else html[idx:idx + 5000]
-                text = re.sub(r'<[^>]+>', ' ', snippet)
-                text = re.sub(r'\s+', ' ', text).strip()
-                if len(text) > 200:
-                    return text
-
-    paras = re.findall(r'<p[^>]*>(.*?)</p>', html_clean, re.I | re.S)
-    valid = []
-    for p in paras:
-        t = re.sub(r'<[^>]+>', '', p).strip()
-        if len(t) > 20 and not any(k in t.lower() for k in EXCLUDE_PARAS):
-            valid.append(t)
-    if valid:
-        return ' '.join(valid)
-
     return None
 
 
-def _postprocess_text(text):
-    text = html.unescape(text)
-    text = re.sub(r'\[!--begin:htmlVideoCode--\].*?\[!--end:htmlVideoCode--\]', '', text, flags=re.S)
-    ui_pats = [
+def extract_body(html, url):
+    m = tf_extract(html, output_format="txt", include_comments=False, include_tables=False, favor_precision=True)
+    body = m.strip() if m else None
+    if (body is None or len(body) < 100) and ('ckxxapp' in url or 'cankaoxiaoxi' in url):
+        body = _extract_ckxx_content_txt(html)
+    return body
+
+
+def _people_postprocess(text):
+    text = re.sub(
+        r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d+.*?(?:/enpproperty-->|$)',
+        '', text, flags=re.S
+    )
+    return text
+
+
+def _cas_postprocess(text):
+    text = re.sub(
+        r'[。，；]?\s*地址：.*?(?:邮编：\s*\d+.*?)?\s*电话：.*$',
+        '', text, flags=re.S
+    )
+    text = re.sub(
+        r'中国科学院贯彻落实党中央.*?创新型大学。\s*',
+        '', text, flags=re.S
+    )
+    return text
+
+
+def _cctv_postprocess(text):
+    pats = [
         r'静音\(m\)', r'全屏\(f\)',
         r'ADCountdown\s*(Time|时间)?', r'广告关闭广告',
         r'正在加载[\s\S]*?视频播放器', r'播放视频播放\([pP]\)',
@@ -101,24 +91,25 @@ def _postprocess_text(text):
         r'您上次观看至[\s\S]*?已为您续播',
         r'尊贵的用户[\s\S]*?跳过广告',
     ]
-    for pat in ui_pats:
+    for pat in pats:
         text = re.sub(pat, '', text, flags=re.S)
-    # R-1: Strip people.com.cn metadata tail (enpproperty 及之前的时间戳/记者信息)
-    text = re.sub(
-        r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d+.*?(?:/enpproperty-->|$)',
-        '', text, flags=re.S
-    )
-    # R-2: Strip CAS footer (地址/邮编/电话)
-    text = re.sub(
-        r'[。，；]?\s*地址：.*?(?:邮编：\s*\d+.*?)?\s*电话：.*$',
-        '', text, flags=re.S
-    )
-    # R-2b: Strip CAS generic institution header — 从"贯彻落实"到"创新型大学"固定模板
-    # 不依赖面包屑，适用所有 CAS 子站页面（syky/cg/zh 等）
-    text = re.sub(
-        r'中国科学院贯彻落实党中央.*?创新型大学。\s*',
-        '', text, flags=re.S
-    )
+    return text
+
+
+SITE_POSTPROCESS = [
+    (lambda url: "people.com.cn" in url, _people_postprocess),
+    (lambda url: "cas.cn" in url, _cas_postprocess),
+    (lambda url: "cctv.com" in url or "military.cctv" in url, _cctv_postprocess),
+]
+
+
+def _postprocess_text(text, url=None):
+    if url is not None:
+        for pred, func in SITE_POSTPROCESS:
+            if pred(url):
+                text = func(text)
+    text = html.unescape(text)
+    text = re.sub(r'\[!--begin:htmlVideoCode--\].*?\[!--end:htmlVideoCode--\]', '', text, flags=re.S)
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'\s{2,}', ' ', text).strip()
     parts = re.split(r'(?<=[。；])', text)
@@ -177,12 +168,12 @@ def fetch_and_extract(url, title):
             return None, "页面过短或为空"
         body = extract_body(html, url)
         if body:
-            processed = _postprocess_text(body)
+            processed = _postprocess_text(body, url)
             if _is_contaminated(processed):
                 cleaned_html = _aggressive_clean(html)
                 body2 = extract_body(cleaned_html, url)
                 if body2:
-                    processed2 = _postprocess_text(body2)
+                    processed2 = _postprocess_text(body2, url)
                     if not _is_contaminated(processed2):
                         return processed2, None
                 return None, "提取结果被污染"
