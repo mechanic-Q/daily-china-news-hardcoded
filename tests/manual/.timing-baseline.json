@@ -1,0 +1,55 @@
+{
+  "date": "2026-06-30",
+  "total_seconds": 57.487943172454834,
+  "sources": [
+    {
+      "name": "新华社",
+      "found": 11,
+      "passed": 11,
+      "failed": 0,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "参考消息",
+      "found": 41,
+      "passed": 41,
+      "failed": 0,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "央视新闻",
+      "found": 0,
+      "passed": 0,
+      "failed": 0,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "央视军事",
+      "found": 0,
+      "passed": 0,
+      "failed": 0,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "中科院",
+      "found": 19,
+      "passed": 19,
+      "failed": 0,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "中核集团",
+      "found": 8,
+      "passed": 0,
+      "failed": 8,
+      "elapsed_s": 0.0
+    },
+    {
+      "name": "人民日报",
+      "found": 51,
+      "passed": 51,
+      "failed": 0,
+      "elapsed_s": 0.0
+    }
+  ]
+}

@@ -13,3 +13,5 @@ Pillow>=10.0         # step8.py 截图后底部空白裁剪
 python-dotenv>=1.0   # .env 文件加载
 PyYAML>=6.0          # llm.yaml 解析（新增依赖，本次变更引入）
 trafilatura>=1.12    # 正文抽取（Phase 15B 引入）
+httpx                 # async HTTP 并发（Phase 15C 引入）
+tenacity              # 自动重试（Phase 15C 引入）
