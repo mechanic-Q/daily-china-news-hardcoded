@@ -15,6 +15,10 @@ call_sites:
     max_tokens: 512
     temperature: 0.7
     timeout: 60
+  monthly-overview:
+    max_tokens: 1200
+    temperature: 0.7
+    timeout: 30
 model: low
 provider: 9router
 providers:

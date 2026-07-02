@@ -2,7 +2,6 @@
 import datetime
 import html
 import json
-import os
 import re
 import subprocess
 import sys
@@ -17,6 +16,7 @@ except ImportError:
     ImageChops = None
 
 from daily.common import BASE_DIR, COLUMN_ORDER, CST
+from llm_client import call_llm, LLMCallError
 
 ARCHIVE_DIR = BASE_DIR / "archive"
 ARTICLES_DIR = ARCHIVE_DIR / "articles"
@@ -24,10 +24,9 @@ IMAGES_DIR = ARCHIVE_DIR / "images"
 MONTHLY_DIR = ARCHIVE_DIR / "monthly"
 DEFAULT_TOP_PER_COLUMN = 3
 DEFAULT_MAX_LLM_SECONDS = 30
-LLM_MODEL = "glm-4-flash"
-LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/"
 OVERVIEW_MAX_CHARS = 700
 BODY_SNIPPET_CHARS = 300
+HEALTH_FILE = ARCHIVE_DIR / "sources_health.jsonl"
 
 
 def parse_args():
@@ -190,6 +189,68 @@ def pick_top_per_column(records, top_n):
     return ordered
 
 
+def load_source_health(month):
+    if not HEALTH_FILE.exists():
+        print(f"\u26a0 sources_health.jsonl \u4e0d\u5b58\u5728\uff0c\u8df3\u8fc7\u5065\u5eb7\u6458\u8981")
+        return []
+    records = []
+    for line in HEALTH_FILE.read_text("utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            print(f"\u26a0 \u5065\u5eb7JSONL\u89e3\u6790\u5931\u8d25\u5df2\u8df3\u8fc7: {line[:80]}")
+    return [r for r in records if r.get("date", "").startswith(month)]
+
+
+def compute_source_health_stats(records):
+    if not records:
+        return {}
+    seen = {}
+    for r in records:
+        key = (r.get("date", ""), r.get("source", ""))
+        seen[key] = r
+    deduped = list(seen.values())
+    from collections import defaultdict
+    by_source = defaultdict(list)
+    for r in deduped:
+        by_source[r.get("source", "")].append(r)
+    stats = {}
+    for source, src_records in by_source.items():
+        dates = sorted(set(r.get("date", "") for r in src_records))
+        run_days = len(dates)
+        passed_vals = [r.get("passed", 0) or 0 for r in src_records]
+        avg_passed = sum(passed_vals) / len(passed_vals) if passed_vals else 0
+        zero_days = sum(1 for p in passed_vals if p == 0)
+        date_passed = {}
+        for r in src_records:
+            date_passed[r.get("date", "")[:10]] = r.get("passed", 0) or 0
+        sorted_dates = sorted(date_passed.keys())
+        worst_streak = 0
+        current_streak = 0
+        prev_date = None
+        for d in sorted_dates:
+            cur_date = datetime.datetime.strptime(d, "%Y-%m-%d").date()
+            if prev_date and (cur_date - prev_date).days != 1:
+                current_streak = 0
+            if date_passed[d] < 5:
+                current_streak += 1
+                if current_streak > worst_streak:
+                    worst_streak = current_streak
+            else:
+                current_streak = 0
+            prev_date = cur_date
+        stats[source] = {
+            "run_days": run_days,
+            "avg_passed": round(avg_passed, 1),
+            "zero_days": zero_days,
+            "worst_streak": worst_streak,
+        }
+    return stats
+
+
 def build_grounding_context(stats, picks):
     sys_lines = [
         "你是每日新中国月报撰写助手。",
@@ -223,34 +284,12 @@ def build_grounding_context(stats, picks):
 
 
 def llm_monthly_overview(context, max_seconds):
-    key = os.environ.get("ZHIPU_API_KEY")
-    if not key:
-        return None
     system_msg, user_msg = context
+    messages = [{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}]
     try:
-        from openai import OpenAI
-        client = OpenAI(base_url=LLM_BASE_URL, api_key=key)
-        result = [None]
-        stop = [False]
-
-        def do_call():
-            resp = client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=[{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}],
-                max_tokens=1200,
-                timeout=max_seconds,
-            )
-            if not stop[0]:
-                result[0] = resp.choices[0].message.content or None
-
-        import threading
-        t = threading.Thread(target=do_call, daemon=True)
-        t.start()
-        t.join(timeout=max_seconds)
-        if t.is_alive():
-            stop[0] = True
-            return None
-        return result[0]
+        return call_llm("monthly-overview", messages, timeout=max_seconds)
+    except LLMCallError:
+        return None
     except Exception:
         return None
 
@@ -292,7 +331,7 @@ def fallback_overview(stats, picks):
     return f"{overview}\n\n{trend}\n\n\u26a0 \u672c\u671f\u4f7f\u7528\u89c4\u5219\u6a21\u677f\uff08LLM\u672a\u542f\u7528\u6216\u5931\u8d25\uff09"
 
 
-def render_markdown(month, stats, picks, overview):
+def render_markdown(month, stats, picks, overview, health_stats=None):
     lines = [f"# \u6bcf\u65e5\u65b0\u4e2d\u56fd \xb7 \u6708\u62a5 \xb7 {month}", ""]
     if overview:
         lines.append(overview)
@@ -304,6 +343,17 @@ def render_markdown(month, stats, picks, overview):
     bc = stats['body_coverage']
     lines.append(f"- \u6b63\u6587: extracted={bc.get('extracted',0)} failed={bc.get('failed',0)} missing={bc.get('missing',0)}")
     lines.append("")
+    if health_stats:
+        lines.append("## \u4fe1\u6e90\u5065\u5eb7")
+        for source in sorted(health_stats.keys()):
+            h = health_stats[source]
+            lines.append(
+                f"- {source}: \u8fd0\u884c{h['run_days']}\u5929, "
+                f"\u5e73\u5747\u901a\u8fc7{h['avg_passed']:.1f}, "
+                f"\u96f6\u901a\u8fc7{h['zero_days']}\u5929, "
+                f"\u4f4e\u8c37\u6700\u957f{h['worst_streak']}\u5929"
+            )
+        lines.append("")
     for col in COLUMN_ORDER:
         if col not in picks:
             continue
@@ -330,8 +380,8 @@ def render_markdown(month, stats, picks, overview):
     return "\n".join(lines)
 
 
-def render_html(month, stats, picks, overview):
-    md = render_markdown(month, stats, picks, overview)
+def render_html(month, stats, picks, overview, health_stats=None):
+    md = render_markdown(month, stats, picks, overview, health_stats=health_stats)
     esc = html.escape(md).replace("\n", "<br>\n")
     return f"""<!DOCTYPE html><html lang=zh-CN><meta charset=utf-8><title>\u6708\u62a5 {month}</title>
 <body style="max-width:960px;margin:0 auto;background:#f5f3ee;padding:20px">
@@ -404,8 +454,15 @@ def main():
             overview = fallback_overview(stats, picks)
     else:
         overview = fallback_overview(stats, picks)
-    md = render_markdown(month, stats, picks, overview)
-    html_content = render_html(month, stats, picks, overview)
+    health_stats = None
+    try:
+        health_records = load_source_health(month)
+        if health_records:
+            health_stats = compute_source_health_stats(health_records)
+    except Exception as e:
+        print(f"\u26a0 \u4fe1\u6e90\u5065\u5eb7\u6458\u8981\u5904\u7406\u5f02\u5e38: {e}")
+    md = render_markdown(month, stats, picks, overview, health_stats=health_stats)
+    html_content = render_html(month, stats, picks, overview, health_stats=health_stats)
     ok = write_outputs(month, md, html_content, stats, picks, dry_run)
     if not ok:
         sys.exit(2)
