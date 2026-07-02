@@ -1,33 +1,16 @@
 {
   "matched": true,
-  "entry_count": 10,
+  "entry_count": 9,
   "entries": [
     {
       "file": "conventions.md",
-      "anchor": "输出目录规范",
+      "anchor": "step-脚本统一接口",
       "keywords": [
-        "输出",
-        "目录",
-        "BASE_DIR",
-        "路径",
-        "0新闻",
-        "1新闻",
-        "2新闻",
-        "3新闻"
-      ],
-      "category": "Conventions"
-    },
-    {
-      "file": "conventions.md",
-      "anchor": "llm-调用约定",
-      "keywords": [
-        "LLM",
-        "openai",
-        "SDK",
-        "base_url",
-        "api_key",
-        "zhipu",
-        "minimax"
+        "step",
+        "脚本",
+        "命令行",
+        "入口",
+        "argparse"
       ],
       "category": "Conventions"
     },
@@ -41,18 +24,6 @@
         "PR"
       ],
       "category": "Conventions"
-    },
-    {
-      "file": "patterns.md",
-      "anchor": "文件接力模式-file-relay",
-      "keywords": [
-        "文件接力",
-        "file relay",
-        "markdown",
-        "管道",
-        "接口契约"
-      ],
-      "category": "Patterns"
     },
     {
       "file": "patterns.md",
@@ -70,6 +41,19 @@
     },
     {
       "file": "patterns.md",
+      "anchor": "智能重试模式-diagnostic-retry",
+      "keywords": [
+        "重试",
+        "retry",
+        "诊断",
+        "diagnose",
+        "RETRY_PROMPTS",
+        "_why_invalid"
+      ],
+      "category": "Patterns"
+    },
+    {
+      "file": "patterns.md",
       "anchor": "chromium-双通道抓取-dual-channel-fetch",
       "keywords": [
         "chromium",
@@ -81,27 +65,24 @@
       "category": "Patterns"
     },
     {
-      "file": "patterns.md",
-      "anchor": "openai-兼容客户端-openai-compatible-client",
+      "file": "known-issues.md",
+      "anchor": "-step1_3--step6-重复定义-chromium_dom",
       "keywords": [
-        "OpenAI 兼容",
-        "openai SDK",
-        "base_url",
-        "provider",
-        "zhipu",
-        "minimax",
-        "9router"
+        "chromium_dom",
+        "重复",
+        "step1_3",
+        "step6"
       ],
-      "category": "Patterns"
+      "category": "Known Issues"
     },
     {
       "file": "known-issues.md",
-      "anchor": "-base_dir-硬编码",
+      "anchor": "-无-requirementstxt--pyprojecttoml",
       "keywords": [
-        "BASE_DIR",
-        "硬编码",
-        "路径",
-        "不可移植"
+        "requirements",
+        "版本",
+        "依赖",
+        "未锁定"
       ],
       "category": "Known Issues"
     },

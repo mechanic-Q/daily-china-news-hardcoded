@@ -21,6 +21,10 @@ from urllib.request import Request, urlopen
 from daily.common import BASE_DIR, parse_common_args as parse_args
 from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom
 
+import httpx
+import tenacity
+from tenacity import stop_after_attempt, wait_exponential, wait_random
+
 
 # ============================================================
 # Step 1+2: 日期确认 + 工作目录
@@ -41,10 +45,17 @@ def init(today):
 # 工具函数
 # ============================================================
 
-def fetch_home_html(url):
+def _is_static_sufficient(html, min_len=500, required_selectors=None):
+    if not html or len(html) < min_len:
+        return False
+    if required_selectors:
+        return all(re.search(sel, html, re.DOTALL | re.IGNORECASE) for sel in required_selectors)
+    return '<a' in html or '<article' in html or '<div' in html
+
+def fetch_home_html(url, required_selectors=None):
     try:
         html = fetch_html_static(url)
-        if html:
+        if _is_static_sufficient(html, required_selectors=required_selectors):
             return html
     except Exception:
         pass
@@ -96,7 +107,7 @@ async def http_200_async(session, url):
 def fetch_xinhuanet(today):
     """新华社: news.cn 首页 → 正则 YYYYMMDD/c.html"""
     today8 = today.strftime("%Y%m%d")
-    html = fetch_home_html("https://www.news.cn/")
+    html = fetch_home_html("https://www.news.cn/", required_selectors=[r'news\.cn', r'c\.html'])
     anchor_titles = {}
     for href, raw in re.findall(r'<a[^>]+href=["\']([^"\']*news\.cn[^"\']*' + today8 + r'[^"\']*c\.html)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE):
         title = clean_anchor_text(raw)
@@ -155,7 +166,7 @@ def fetch_ckxx(today):
 def fetch_cctv_news(today):
     """央视新闻: 首页 DOM 提取 (URL, title) 对"""
     today_path = today.strftime("%Y/%m/%d")
-    html = fetch_home_html("https://news.cctv.com/")
+    html = fetch_home_html("https://news.cctv.com/", required_selectors=[r'cctv\.com.*?\.shtml'])
     links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
     results = []
     seen = set()
@@ -175,7 +186,7 @@ def fetch_cctv_news(today):
 def fetch_cctv_military(today):
     """央视军事: 首页 DOM 提取 (URL, title) 对"""
     today_path = today.strftime("%Y/%m/%d")
-    html = fetch_home_html("https://military.cctv.com/")
+    html = fetch_home_html("https://military.cctv.com/", required_selectors=[r'military\.cctv\.com.*?\.shtml'])
     links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
     results = []
     seen = set()
@@ -193,27 +204,31 @@ def fetch_cctv_military(today):
 
 
 def fetch_cas(today):
-    """中科院: urllib 首页 → 匹配 YYYYMM 前缀（兼容 tYYYYMMDD_* 和 /YYYYMM/ 格式）"""
+    """中科院: urllib 首页 → 匹配 YYYYMM 前缀"""
     html = fetch_html_static("https://www.cas.cn/", timeout=15)
     yyyymm = today.strftime("%Y%m")
     raw_urls = re.findall(rf'//www\.cas\.cn/\.\./\.\./([^"\'\s]*{yyyymm}[^"\'\s]*\.shtml)', html)
-    results = []
     seen = set()
+    urls = []
     for raw in raw_urls:
         parts = [p for p in raw.split("/") if p and p != ".."]
         u = f"https://www.cas.cn/{'/'.join(parts)}"
-        if u in seen:
-            continue
-        seen.add(u)
-        t = fetch_title(fetch_html_static(u, timeout=10))
-        if t:
-            results.append({"url": u, "title": t})
+        if u not in seen:
+            seen.add(u)
+            urls.append(u)
+    htmls = _fetch_many_sync(urls)
+    results = []
+    for u, h in zip(urls, htmls):
+        if h:
+            t = fetch_title(h)
+            if t:
+                results.append({"url": u, "title": t})
     return results
 
 
 def fetch_cnnc_chromium(today):
     """中核集团 → 方案1: cnnc.com.cn"""
-    html = fetch_home_html("https://www.cnnc.com.cn/")
+    html = fetch_home_html("https://www.cnnc.com.cn/", required_selectors=[r'cnnc\.com\.cn'])
     links_titles = re.findall(
         r'<a[^>]+href=["\']([^"\']*cnnc[^"\']*202[56]\d{4}[^"\']*)["\'][^>]*>(.*?)</a>',
         html,
@@ -230,7 +245,7 @@ def fetch_cnnc_chromium(today):
 
 def fetch_cnnc_cnnpn(today):
     """中核集团 → 方案2: cnnpn.cn 聚合站（CF 绕过）"""
-    html = fetch_home_html("https://www.cnnpn.cn/")
+    html = fetch_home_html("https://www.cnnpn.cn/", required_selectors=[r'cnnpn\.cn.*?article'])
     links = re.findall(r'href=["\']([^"\']*cnnpn\.cn[^"\']*article[^"\']*)["\']', html)
     links = list(dict.fromkeys(links))
     results = []
@@ -261,28 +276,32 @@ def fetch_cnnc(today):
 
 def fetch_rmrb(today):
     """人民日报: urllib 版面索引 → content_*.html"""
-    results = []
+    yyyymm = today.strftime("%Y%m")
+    dd = today.strftime("%d")
+    layout_urls = [
+        f"https://paper.people.com.cn/rmrb/pc/layout/{yyyymm}/{dd}/node_{node:02d}.html"
+        for node in range(1, 10)
+    ]
+    layout_htmls = _fetch_many_sync(layout_urls)
     seen = set()
-    for node in range(1, 10):
-        layout_url = f"https://paper.people.com.cn/rmrb/pc/layout/{today.strftime('%Y%m')}/{today.strftime('%d')}/node_{node:02d}.html"
-        try:
-            html = fetch_html_static(layout_url, timeout=10)
-        except Exception:
+    content_urls = []
+    for html in layout_htmls:
+        if not html:
             continue
         hrefs = re.findall(r'href=["\']([^"\']*content_\d+\.html)["\']', html)
         for raw in hrefs:
             filename = raw.split("/")[-1]
-            u = f"https://paper.people.com.cn/rmrb/pc/content/{today.strftime('%Y%m')}/{today.strftime('%d')}/{filename}"
-            if u in seen:
-                continue
-            seen.add(u)
-            try:
-                h = fetch_html_static(u, timeout=10)
-                t = fetch_title(h)
-                if t:
-                    results.append({"url": u, "title": t})
-            except Exception:
-                continue
+            u = f"https://paper.people.com.cn/rmrb/pc/content/{yyyymm}/{dd}/{filename}"
+            if u not in seen:
+                seen.add(u)
+                content_urls.append(u)
+    content_htmls = _fetch_many_sync(content_urls)
+    results = []
+    for u, h in zip(content_urls, content_htmls):
+        if h:
+            t = fetch_title(h)
+            if t:
+                results.append({"url": u, "title": t})
     return results
 
 
@@ -364,6 +383,38 @@ def write_0(today, entries, dry_run):
 
 
 # ============================================================
+# async helper
+# ============================================================
+
+async def _async_fetch_many(urls, semaphore=None, max_concurrent=5):
+    """受控并发抓取多个 URL，保持输入顺序。失败条目返回 None。"""
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+    @tenacity.retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10) + wait_random(0, 2)
+    )
+    async def _fetch_one(client, url):
+        async with semaphore:
+            resp = await client.get(url, timeout=httpx.Timeout(12.0))
+            resp.raise_for_status()
+            return resp.text
+
+    async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
+        results = await asyncio.gather(
+            *[_fetch_one(client, u) for u in urls],
+            return_exceptions=True
+        )
+    return [r if not isinstance(r, Exception) else None for r in results]
+
+
+def _fetch_many_sync(urls, max_concurrent=5):
+    """同步调用 _async_fetch_many。"""
+    return asyncio.run(_async_fetch_many(urls, max_concurrent=max_concurrent))
+
+
+# ============================================================
 # 主流程
 # ============================================================
 
@@ -388,6 +439,7 @@ def main():
     all_entries = []
 
     for i, (name, fetcher, tool) in enumerate(SOURCES, 1):
+        t0 = time.time()
         print(f"[{i}/7] {name}...", end=" ", flush=True)
 
         try:
@@ -398,17 +450,18 @@ def main():
                 items = fetcher(today)
 
             if not items:
-                print(f"→ 0条 → ❌失败")
+                elapsed = time.time() - t0
+                print(f"→ 0条 → ❌失败 ({elapsed:.1f}s)")
                 all_entries.append({
                     "source": name, "passed": [], "failed": [], "tool": tool
                 })
                 continue
 
-            print(f"→ {len(items)}条")
-
             # ② 仅 HTTP 200 验证（Python 不编造 URL）
             passed, failed, _ = asyncio.run(verify_http(items, today))
+            elapsed = time.time() - t0
 
+            print(f"→ {len(items)}条 ({elapsed:.1f}s)")
             print(f"    ✅{len(passed)} / ❌{len(failed)}")
 
             all_entries.append({
@@ -416,7 +469,8 @@ def main():
             })
 
         except Exception as e:
-            print(f"❌ 异常: {e}")
+            elapsed = time.time() - t0
+            print(f"→ ❌ 异常 ({elapsed:.1f}s): {e}")
             all_entries.append({
                 "source": name, "passed": [], "failed": [], "tool": tool
             })
