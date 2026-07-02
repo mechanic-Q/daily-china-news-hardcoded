@@ -111,6 +111,13 @@ def _emit_health_warnings(name, passed_count, today_str):
     recent_dates = [d for d in sorted_dates if d <= today_str][-3:]
 
     if len(recent_dates) >= 3:
+        try:
+            parsed = [datetime.strptime(d, "%Y-%m-%d").date() for d in recent_dates]
+        except ValueError:
+            return
+        for i in range(1, len(parsed)):
+            if (parsed[i] - parsed[i-1]).days != 1:
+                return
         recent = [daily[d] for d in recent_dates]
         if all(int(r.get("passed", 0)) < 5 for r in recent):
             vals = ", ".join(str(r.get("passed", 0)) for r in recent)

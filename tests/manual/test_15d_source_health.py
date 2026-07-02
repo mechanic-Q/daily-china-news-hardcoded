@@ -106,6 +106,18 @@ def test_banner_zero():
     print("PASS: banner-zero triggered with passed==0")
 
 
+def _consecutive_dates(dates):
+    """Return True if all dates are consecutive calendar days."""
+    try:
+        parsed = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
+    except ValueError:
+        return False
+    for i in range(1, len(parsed)):
+        if (parsed[i] - parsed[i-1]).days != 1:
+            return False
+    return True
+
+
 def test_banner_streak():
     today = "2026-07-03"
     records = [
@@ -118,7 +130,8 @@ def test_banner_streak():
         daily[r["date"]] = r
     sorted_dates = sorted(daily.keys())
     recent_dates = [d for d in sorted_dates if d <= today][-3:]
-    assert len(recent_dates) >= 3, "need >=3 consecutive days"
+    assert len(recent_dates) >= 3, "need >=3 days"
+    assert _consecutive_dates(recent_dates), "dates must be consecutive"
     recent = [daily[d] for d in recent_dates]
     all_bad = all(int(r.get("passed", 0)) < 5 for r in recent)
     assert all_bad, "all 3 days should have passed<5"
@@ -139,6 +152,25 @@ def test_banner_streak():
     assert "WARNING" in output
     assert "passed<5" in output
     print("PASS: banner-streak triggered for 3 consecutive days passed<5")
+
+
+def test_no_banner_non_consecutive():
+    """Non-consecutive low-passed dates must NOT trigger banner."""
+    today = "2026-07-07"
+    records = [
+        {"date": "2026-07-01", "source": "test_source", "passed": 1},
+        {"date": "2026-07-03", "source": "test_source", "passed": 2},
+        {"date": "2026-07-07", "source": "test_source", "passed": 3},
+    ]
+    daily = {}
+    for r in records:
+        daily[r["date"]] = r
+    sorted_dates = sorted(daily.keys())
+    recent_dates = [d for d in sorted_dates if d <= today][-3:]
+    if len(recent_dates) >= 3:
+        assert not _consecutive_dates(recent_dates), \
+            "non-consecutive dates must NOT pass consecutive check"
+    print("PASS: non-consecutive low dates do not trigger banner-streak")
 
 
 def compute_source_health_stats(records):
@@ -243,6 +275,8 @@ def main():
                    help="Construct passed==0 mock, verify banner on stderr")
     p.add_argument("--test-banner-streak", action="store_true",
                    help="Construct 3 consecutive passed<5 days, verify banner")
+    p.add_argument("--test-no-banner-non-consecutive", action="store_true",
+                   help="Non-consecutive low dates must NOT trigger banner")
     p.add_argument("--test-monthly", action="store_true",
                    help="Construct multi-day multi-source JSONL, verify report stats")
     p.add_argument("--test-llm-client", action="store_true",
@@ -267,6 +301,10 @@ def main():
     if args.test_banner_streak:
         ran_any = True
         test_banner_streak()
+
+    if args.test_no_banner_non_consecutive:
+        ran_any = True
+        test_no_banner_non_consecutive()
 
     if args.test_monthly:
         ran_any = True
