@@ -13,9 +13,12 @@ import asyncio
 import aiohttp
 import html as html_lib
 import json
+import logging
 import re
 import sys
 import time
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone, timedelta
 from urllib.request import Request, urlopen
 
 from daily.common import BASE_DIR, parse_common_args as parse_args
@@ -24,6 +27,94 @@ from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom
 import httpx
 import tenacity
 from tenacity import stop_after_attempt, wait_exponential, wait_random
+
+logger = logging.getLogger(__name__)
+
+_CST = timezone(timedelta(hours=8))
+
+HEALTH_FILE = BASE_DIR / "archive" / "sources_health.jsonl"
+
+
+@dataclass
+class HealthRecord:
+    date: str
+    source: str
+    passed: int
+    failed: int
+    total: int
+    tool: str
+    elapsed_ms: int
+    status: str
+    recorded_at: str
+
+
+def write_health_record(record, dry_run=False):
+    """Best-effort 写入一条 health JSONL 记录。"""
+    try:
+        HEALTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(asdict(record) if hasattr(record, '__dataclass_fields__') else record, ensure_ascii=False)
+        if dry_run:
+            print(f"  [dry-run] would-write health: {line}")
+        else:
+            with open(HEALTH_FILE, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+    except Exception as e:
+        logger.warning("写入 health 记录失败: %s", e)
+
+
+def _read_recent_health(source, today_str, days=7):
+    """读取 HEALTH_FILE 最近 N 天同 source 记录，失败返回空列表。"""
+    try:
+        if not HEALTH_FILE.exists():
+            return []
+        records = []
+        with open(HEALTH_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("source") != source:
+                    continue
+                rec_date = rec.get("date", "")
+                if not rec_date or rec_date > today_str:
+                    continue
+                td = datetime.strptime(today_str, "%Y-%m-%d").date()
+                rd = datetime.strptime(rec_date, "%Y-%m-%d").date()
+                if (td - rd).days >= days:
+                    continue
+                records.append(rec)
+        records.sort(key=lambda r: r.get("date", ""))
+        return records
+    except Exception:
+        logger.warning("读取 health JSONL 失败，跳过 warning 检查")
+        return []
+
+
+def _emit_health_warnings(name, passed_count, today_str):
+    """根据当天 results 和历史记录输出 warning banner 到 stderr。"""
+    if passed_count == 0:
+        print(f"\u26a0\ufe0f  [WARNING] \u4fe1\u6e90\u5065\u5eb7: {name} passed=0 ({today_str})", file=sys.stderr)
+
+    records = _read_recent_health(name, today_str)
+    if not records:
+        return
+
+    daily = {}
+    for r in records:
+        daily[r.get("date", "")] = r
+
+    sorted_dates = sorted(daily.keys())
+    recent_dates = [d for d in sorted_dates if d <= today_str][-3:]
+
+    if len(recent_dates) >= 3:
+        recent = [daily[d] for d in recent_dates]
+        if all(int(r.get("passed", 0)) < 5 for r in recent):
+            vals = ", ".join(str(r.get("passed", 0)) for r in recent)
+            print(f"\u26a0\ufe0f  [WARNING] \u4fe1\u6e90\u5065\u5eb7: {name} \u8fde\u7eed3\u5929 passed<5 ({vals}, {recent_dates[0]}~{recent_dates[-1]})", file=sys.stderr)
 
 
 # ============================================================
@@ -450,30 +541,52 @@ def main():
                 items = fetcher(today)
 
             if not items:
-                elapsed = time.time() - t0
-                print(f"→ 0条 → ❌失败 ({elapsed:.1f}s)")
+                elapsed_ms = int((time.time() - t0) * 1000)
+                print(f"→ 0条 → ❌失败 ({elapsed_ms / 1000:.1f}s)")
                 all_entries.append({
                     "source": name, "passed": [], "failed": [], "tool": tool
                 })
+                hr = HealthRecord(
+                    date=today_str, source=name, passed=0, failed=0,
+                    total=0, tool=tool, elapsed_ms=elapsed_ms,
+                    status="failed",
+                    recorded_at=datetime.now(_CST).isoformat(),
+                )
+                write_health_record(hr, dry_run)
                 continue
 
             # ② 仅 HTTP 200 验证（Python 不编造 URL）
             passed, failed, _ = asyncio.run(verify_http(items, today))
-            elapsed = time.time() - t0
+            elapsed_ms = int((time.time() - t0) * 1000)
 
-            print(f"→ {len(items)}条 ({elapsed:.1f}s)")
+            print(f"→ {len(items)}条 ({elapsed_ms / 1000:.1f}s)")
             print(f"    ✅{len(passed)} / ❌{len(failed)}")
 
             all_entries.append({
                 "source": name, "passed": passed, "failed": failed, "tool": tool
             })
+            hr = HealthRecord(
+                date=today_str, source=name, passed=len(passed),
+                failed=len(failed), total=len(items), tool=tool,
+                elapsed_ms=elapsed_ms,
+                status="ok" if len(passed) > 0 else "failed",
+                recorded_at=datetime.now(_CST).isoformat(),
+            )
+            write_health_record(hr, dry_run)
 
         except Exception as e:
-            elapsed = time.time() - t0
-            print(f"→ ❌ 异常 ({elapsed:.1f}s): {e}")
+            elapsed_ms = int((time.time() - t0) * 1000)
+            print(f"→ ❌ 异常 ({elapsed_ms / 1000:.1f}s): {e}")
             all_entries.append({
                 "source": name, "passed": [], "failed": [], "tool": tool
             })
+            hr = HealthRecord(
+                date=today_str, source=name, passed=0, failed=0,
+                total=0, tool=tool, elapsed_ms=elapsed_ms,
+                status="failed",
+                recorded_at=datetime.now(_CST).isoformat(),
+            )
+            write_health_record(hr, dry_run)
 
     # ③ 写入
     passed_count = write_0(today, all_entries, dry_run)
@@ -489,6 +602,10 @@ def main():
             print(f"  ⚠ {entry['source']}: {p}条通过, {f}条淘汰")
         else:
             print(f"  ❌ {entry['source']}: 不可达")
+
+    # health warning banners
+    for entry in all_entries:
+        _emit_health_warnings(entry["source"], len(entry["passed"]), today_str)
 
     print(f"\n产出: {passed_count}/7 信源有通过条目")
     if dry_run:
