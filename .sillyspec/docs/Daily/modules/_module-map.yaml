@@ -1,7 +1,7 @@
 schema_version: 1
 project: Daily
 source_commit: 67748e5
-generated_at: 2026-07-03 13:10:00
+generated_at: 2026-07-03 21:30:00
 generator: sillyspec-scan
 author: lmr
 
@@ -50,6 +50,7 @@ modules:
     paths:
       - llm_client.py
       - llm.yaml
+      - tests/test_llm_client.py
     tags:
       - llm
       - config
@@ -325,6 +326,7 @@ modules:
       - IMAGES_DIR
       - ARCHIVE_DIR
       - BODY_IMAGE_FIELDS
+      - migrate_record
     depends_on:
       - extractor
     used_by:

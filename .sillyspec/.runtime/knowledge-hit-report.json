@@ -16,6 +16,35 @@
     },
     {
       "file": "conventions.md",
+      "anchor": "输出目录规范",
+      "keywords": [
+        "输出",
+        "目录",
+        "BASE_DIR",
+        "路径",
+        "0新闻",
+        "1新闻",
+        "2新闻",
+        "3新闻"
+      ],
+      "category": "Conventions"
+    },
+    {
+      "file": "conventions.md",
+      "anchor": "llm-调用约定",
+      "keywords": [
+        "LLM",
+        "openai",
+        "SDK",
+        "base_url",
+        "api_key",
+        "zhipu",
+        "minimax"
+      ],
+      "category": "Conventions"
+    },
+    {
+      "file": "conventions.md",
       "anchor": "分支策略",
       "keywords": [
         "branch",
@@ -40,29 +69,15 @@
       "category": "Patterns"
     },
     {
-      "file": "patterns.md",
-      "anchor": "智能重试模式-diagnostic-retry",
+      "file": "known-issues.md",
+      "anchor": "-base_dir-硬编码",
       "keywords": [
-        "重试",
-        "retry",
-        "诊断",
-        "diagnose",
-        "RETRY_PROMPTS",
-        "_why_invalid"
+        "BASE_DIR",
+        "硬编码",
+        "路径",
+        "不可移植"
       ],
-      "category": "Patterns"
-    },
-    {
-      "file": "patterns.md",
-      "anchor": "chromium-双通道抓取-dual-channel-fetch",
-      "keywords": [
-        "chromium",
-        "dump-dom",
-        "抓取",
-        "双通道",
-        "fetch"
-      ],
-      "category": "Patterns"
+      "category": "Known Issues"
     },
     {
       "file": "known-issues.md",
@@ -72,17 +87,6 @@
         "重复",
         "step1_3",
         "step6"
-      ],
-      "category": "Known Issues"
-    },
-    {
-      "file": "known-issues.md",
-      "anchor": "-无-requirementstxt--pyprojecttoml",
-      "keywords": [
-        "requirements",
-        "版本",
-        "依赖",
-        "未锁定"
       ],
       "category": "Known Issues"
     },

@@ -1559,3 +1559,181 @@ status: passed
 
 ## 2026/7/3 14:44:13 | 2026-07-06-phase-15f-image-quality | brainstorm: 用户确认并生成规范文件 [CONTINUED]
 - 回答：确认
+
+## 2026/7/3 19:45:48 | 2026-07-07-phase-15g-engineering | brainstorm: 状态检查
+- 输入：用户选择重新开始 brainstorm
+- 输出：currentStage confirmed as brainstorm for change 2026-07-07-phase-15g-engineering; user chose to restart brainstorm instead of continuing revision repair. Change name is meaningful; no rename needed.
+
+## 2026/7/3 19:48:44 | 2026-07-07-phase-15g-engineering | brainstorm: 状态检查
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。
+- 输出：currentStage 为 brainstorm；变更名 2026-07-07-phase-15g-engineering 有意义，无需重命名。已从 reset 后重新开始 brainstorm。
+
+## 2026/7/3 19:49:04 | 2026-07-07-phase-15g-engineering | brainstorm: 加载项目上下文
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。
+- 输出：Daily 是单项目 Python 3.12 文件接力新闻流水线：step1_3→step4→step6→step7→step8，经 Markdown 中间文件传递数据，run_all.sh 串行编排，输出到 /mnt/e/每日新中国。local.yaml 表明无 build/test/lint 默认命令，测试策略 skip，完整运行命令为 ./run_all.sh；执行验证前优先遵守 local.yaml。Phase 15G 属于 engineering hardening，粗匹配模块为 llm-client（异常脱敏）、archiver/news_archive（schema migration）、orchestrator/CI（GitHub Actions）、classifier/extractor/summarizer/renderer 相关单测与日志接入。当前活跃变更较多，后续命令必须继续带 --change 2026-07-07-phase-15g-engineering。
+
+## 2026/7/3 19:49:18 | 2026-07-07-phase-15g-engineering | brainstorm: 协作与复用检查
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。
+- 输出：已有活跃变更包括 Phase 15A、15E、15G、phase15c 等；Phase 15G engineering hardening 当前变更名唯一，未发现同名重复。全局模板目录 ~/.sillyspec/templates/ 不存在，无可复用模板；无冲突，继续。
+
+## 2026/7/3 19:49:26 | 2026-07-07-phase-15g-engineering | brainstorm: 原型/设计图分析
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。
+- 输出：用户未提供截图、图片或 HTML 原型；Phase 15G 为工程化收尾变更，不涉及页面结构、表单字段或交互流程。原型/设计图分析跳过。
+
+## 2026/7/3 19:49:49 | 2026-07-07-phase-15g-engineering | brainstorm: 需求范围评估
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。
+- 输出：无需拆分。Phase 15G 包含日志、LLM 异常脱敏、archive schema migration、测试与 CI 等多个工程护栏，但任务数小于 10，均服务于同一个 engineering hardening 目标，不是模板×数据的批量模式，也无跨页面/权限视图状态流转。后续在单个 plan.md 内按 Wave 拆分即可。
+
+## 2026/7/3 19:54:58 | 2026-07-07-phase-15g-engineering | brainstorm: 对话式探索 [CONTINUED]
+- 回答：中文交流
+
+## 2026/7/3 19:55:22 | 2026-07-07-phase-15g-engineering | brainstorm: 对话式探索 [CONTINUED]
+- 回答：标准库 logging
+
+## 2026/7/3 19:55:31 | 2026-07-07-phase-15g-engineering | brainstorm: 对话式探索
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。用户补充：后续中文交流；日志方案选择标准库 logging。
+- 输出：需求已明确：Phase 15G 做工程化收尾，目标是补齐长期维护护栏；日志采用标准库 logging，避免新增 loguru 依赖；仍需包含 LLM 异常脱敏、archive schema migration、关键单元测试与 GitHub Actions CI；不改业务算法、不改用户运行命令、不引入数据库化。
+
+## 2026/7/3 19:56:27 | 2026-07-07-phase-15g-engineering | brainstorm: 需求澄清 Grill
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。用户补充：后续中文交流；日志方案选择标准库 logging。
+- 输出：需求澄清 Grill skipped：无 P0 歧义，P1/P2 歧义不超过 2 个且可在设计内联处理。决策草稿 D-001@v1：日志采用标准库 logging，source=user，normalized_requirement=零新增日志依赖，同时提供日志级别与持久化；impacts=[FR-01, task-logging, verify-logging]。代码查证：llm_client.call_llm 当前使用 traceback.print_exc 并将异常字符串拼入 LLMCallError，需脱敏；news_archive.py 当前 build_record 写 SCHEMA_VERSION，但 load_month_records 不 migration，需新增 migrate_record 并在 load 时调用；local.yaml 指定无标准 test/lint 命令，CI 可只安装 requirements 并运行 pytest tests/，manual tests 不纳入 CI。剩余低风险默认：日志落点使用项目既有输出根附近的 logs 目录或按设计明确，不改变 run_all.sh 用户命令。
+
+## 2026/7/3 19:57:21 | 2026-07-07-phase-15g-engineering | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：方案A
+
+## 2026/7/3 19:57:30 | 2026-07-07-phase-15g-engineering | brainstorm: 提出 2-3 种方案
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。用户补充：后续中文交流；日志方案选择标准库 logging；方案选择方案A。
+- 输出：用户选择方案A：最小工程护栏。后续设计应采用标准库 logging，新增轻量日志配置但不全量替换所有 print；重点实现 llm_client.call_llm 脱敏、news_archive.migrate_record load-time schema migration、关键单元测试与 GitHub Actions CI。方案A 覆盖 D-001@v1，保持零新日志依赖和最小可验证改动；明确不选择全 pipeline 日志替换，也不延期日志目标。
+
+## 2026/7/3 19:58:09 | 2026-07-07-phase-15g-engineering | brainstorm: 分段展示设计 [CONTINUED]
+- 回答：确认
+
+## 2026/7/3 19:58:17 | 2026-07-07-phase-15g-engineering | brainstorm: 分段展示设计
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。用户补充：后续中文交流；日志方案选择标准库 logging；方案选择方案A；确认设计方案。
+- 输出：用户确认设计方案与变更名 2026-07-07-phase-15g-engineering。正式设计应采用方案A：最小工程护栏，标准库 logging，LLM 异常脱敏，news_archive load-time schema migration，关键单元测试和 GitHub Actions CI；不全量替换所有 print，不改业务算法，不改运行命令，不跑 manual tests，不依赖 Chromium。
+
+## 2026/7/3 19:58:26 | 2026-07-07-phase-15g-engineering | brainstorm: HTML 原型生成
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 来修复 Phase 15G engineering hardening 文档。用户补充：后续中文交流；日志方案选择标准库 logging；方案选择方案A；确认设计方案。
+- 输出：跳过 HTML 原型。本变更是纯工程化后端/配置护栏：logging、LLM 脱敏、archive migration、tests、CI；无 UI 组件、页面布局、表单或交互流程，生成 HTML 原型无实际确认价值。
+
+## 2026/7/3 20:10:09 | 2026-07-07-phase-15g-engineering | plan: 复杂度分类与上下文加载
+- 输入：用户请求运行 plan；plan 被 design.md 契约阻塞后，用户选择重新开始 brainstorm 并确认方案A：标准库 logging、LLM 脱敏、archive migration、测试、CI。
+- 输出：plan_level: full
+reason: 涉及 8 个以上文件、跨 llm-client/archiver/orchestrator/classifier/extractor/tests/CI 多模块，并包含 archive schema migration 与 CI 验收。
+estimated_files: 8
+cross_module: true
+has_schema_change: true
+has_state_machine_change: false
+needs_parallel_execution: false
+needs_human_review: true
+
+已确认 currentStage 为 plan。已加载 proposal.md、design.md、requirements.md、tasks.md、decisions.md；当前决策为 D-001@v1、D-002@v1、D-003@v1、D-004@v1，均为 accepted，无 unresolved/blocking。已加载 CONVENTIONS.md、ARCHITECTURE.md、local.yaml、_module-map.yaml；CODEBASE-OVERVIEW.md 与 STACK.md 不存在，已按提示跳过。匹配模块：llm-client（llm_client.py/llm.yaml，被 classifier/summarizer 使用）、archiver（news_archive.py/archive_enrich.py，被 classifier/monthly 使用，依赖 extractor）、orchestrator（run_all.sh/CI 入口）、classifier（step4 相关纯函数测试）、extractor（step6 相关纯函数测试）。local.yaml 表明无 build/test/lint 默认命令，完整运行命令为 ./run_all.sh；本 phase 的 CI 按 design 显式运行 python3 -m pytest tests/，manual tests 不纳入。
+
+## 2026/7/3 20:11:30 | 2026-07-07-phase-15g-engineering | plan: 生成分级计划与自检
+- 输入：用户请求运行 plan；已完成 brainstorm 契约修复并确认方案A。plan_level=full。
+- 输出：已生成 .sillyspec/changes/2026-07-07-phase-15g-engineering/plan.md。计划为 full，包含 3 个 Wave、8 个 checkbox task、任务总表、关键路径、调用点搜索记录、全局验收标准和覆盖矩阵。当前版本决策 D-001@v1 至 D-004@v1 均已覆盖；不存在 unresolved/blocking 决策。自检通过：任务格式为 - [ ] task-XX:，无估时列，无 Mermaid，未放接口/代码实现细节，包含 brownfield 兼容验收，已记录 call_llm/load_month_records/archive_articles 调用点搜索。
+
+## 2026/7/3 21:05:45 | 2026-07-07-phase-15g-engineering | plan: 生成 TaskCard（子代理并行）
+- 输入：用户请求运行 plan；plan_level=full；已生成 plan.md 并按 CLI 要求用子代理生成 TaskCard。
+- 输出：已生成 8 个 TaskCard：tasks/task-01.md 到 tasks/task-08.md。每个文件存在且非空，行数 28-29 行，满足 20-40 行要求。frontmatter 包含 id、title、author、created_at、priority、depends_on、blocks、allowed_paths，并包含 requirement_ids、decision_ids；body 包含 goal、implementation、acceptance、verify、constraints。依赖与 plan.md Wave 一致：task-02 依赖 task-01，task-03 依赖 task-02，task-05 依赖 task-04，task-06 依赖 task-03，task-07 依赖 task-05，task-08 依赖 task-03/task-05/task-06/task-07。allowed_paths 均限定到对应实现/测试/CI 文件，无明显冲突。
+
+## 2026/7/3 21:06:56 | 2026-07-07-phase-15g-engineering | plan: Wave 重排与可行性校验
+- 输入：用户请求运行 plan；已生成 plan.md 与 8 个 TaskCard，并完成 Wave 可行性校验。
+- 输出：Wave 重排与可行性校验完成。原 plan 中 task-02/task-03 与 Wave 1 并行描述不一致，已修正为：Wave1 task-01/task-04；Wave2 task-02/task-05；Wave3 task-03/task-07；Wave4 task-06；Wave5 task-08。任务总表和关键路径已同步：主路径 task-01→task-02→task-03→task-06→task-08，并行路径 task-04→task-05→task-07→task-08。TaskCard 依赖与 Wave 一致，且修正 task-03 blocks 包含 task-06/task-08。所有 TaskCard 仍为 28-29 行并包含必需字段。计划可执行，无 unresolved/blocking 决策。
+
+## 2026/7/3 21:12:46 | 2026-07-07-phase-15g-engineering | execute: 状态检查
+- 输入：用户请求 run execute
+- 输出：状态检查通过：currentStage=波次执行，执行范围=全部5 waves（Wave 1 task-01/task-04 → Wave 2 task-02/task-05 → Wave 3 task-03/task-07 → Wave 4 task-06 → Wave 5 task-08）
+
+## 2026/7/3 21:15:00 | 2026-07-07-phase-15g-engineering | execute: 加载上下文
+- 输入：用户请求 run execute
+- 输出：Step 2 上下文加载完成。已读取：design.md、plan.md、module-map.yaml、llm-client/archiver/classifier/extractor 模块文档、llm_client.py、news_archive.py、tests/test_news_archive.py、tests/test_archive_enrich.py。符号影响面扫描：call_llm 签名不变，8 个调用点均在 step4/step7/monthly_report 内；load_month_records 签名不变，调用点在 archive_enrich/news_archive/tests 内，范围与 plan 一致。migrate_record 为新增函数，无已有调用点。无调用点超出 allowed_paths，不阻断 execute。
+
+## 2026/7/3 21:15:48 | 2026-07-07-phase-15g-engineering | execute: 确认 worktree 路径
+- 输出：worktree 路径: /home/lmr/projects/Daily/.sillyspec/.runtime/worktrees/2026-07-07-phase-15g-engineering, 分支: sillyspec/2026-07-07-phase-15g-engineering, 模式: worktree, 目录确认存在。后续所有代码修改在 worktree 内进行。
+
+## 2026/7/3 21:16:07 | 2026-07-07-phase-15g-engineering | execute: 确认执行范围
+- 输入：用户请求 run execute，默认 wave 确认模式
+- 输出：执行范围确认：5 Waves 8 Tasks。Wave1(task-01/daily_logging.py + task-04/news_archive.py)→Wave2(task-02/llm_client.py + task-05/tests)+→Wave3(task-03/tests + task-07/tests)→Wave4(task-06/tests)→Wave5(task-08/.github/workflows/)。无 --confirm-mode 参数，默认 wave 模式（每 Wave 完成后展示结果）。知识库命中 9 条，已读取 conventions.md 和 known-issues.md。任务模型分配：task-01/02/04 常规实现，task-03/05/06/07 简单修改，task-08 文档/配置。
+
+## 2026/7/3 21:20:23 | 2026-07-07-phase-15g-engineering | execute: Wave 1 执行
+- 输入：用户请求 run execute
+- 输出：Wave 1 (task-01 + task-04) 完成。task-01: daily_logging.py created — setup_logging() with stdout+file handler, idempotent, graceful OSError fallback, DAILY_LOG_LEVEL env override, only stdlib. task-04: migrate_record() added — v1→v2 migration with safe defaults, load_month_records integrated, original dict not mutated. Both review.json written. plan.md checkboxes updated. Syntax and functional tests passed. 跳过 endpoint artifact：本 Wave 无 router 端点。
+
+## 2026/7/3 21:22:47 | 2026-07-07-phase-15g-engineering | execute: Wave 2 执行
+- 输入：用户请求 run execute
+- 输出：Wave 2 (task-02 + task-05) 完成。task-02: llm_client.py redacted — traceback.print_exc() removed, _logger setup with daily_logging, safe error fields only (call_site_id/exception_type/status_code/error_code), LLMCallError stripped of {e}, from e preserved. task-05: TestMigrateRecord class with 5 tests (v1 migration, current version unchanged, field preservation, normalized_url fill, updated_at fill). Tests: 28/28 passed. Both review.json written. plan.md checkboxes updated. 跳过 endpoint artifact：本 Wave 无 router 端点。
+
+## 2026/7/3 21:26:12 | 2026-07-07-phase-15g-engineering | execute: Wave 3 执行
+- 输入：用户请求 run execute
+- 输出：Wave 3 (task-03 + task-07) 完成。task-03: tests/test_llm_client.py with 3 tests — raises LLMCallError, msg redacted, API key redacted from log. task-07: tests/test_step6.py with 15 tests across 5 classes — postprocess, contamination, CAS/CCTV/ckxx helpers. Tests: 46/46 passed (28 existing + 3 LLM + 15 step6). plan.md checkboxes updated. 跳过 endpoint artifact：无 router 端点。
+
+## 2026/7/3 21:28:01 | 2026-07-07-phase-15g-engineering | execute: Wave 4 执行
+- 输入：用户请求 run execute
+- 输出：Wave 4 (task-06) 完成。task-06: tests/test_step4.py created with 24 tests across 8 classes — China relation/source detection, JSON stripping/extraction, chunking, quality news filtering, keyword scoring, high confidence classification. No LLM/network/Chromium. Full test suite: 70/70 passed. plan.md checkbox updated. 跳过 endpoint artifact：无 router 端点。
+
+## 2026/7/3 21:29:00 | 2026-07-07-phase-15g-engineering | execute: Wave 5 执行
+- 输入：用户请求 run execute
+- 输出：Wave 5 (task-08) 完成。task-08: .github/workflows/test.yml created — push/PR triggers, Python 3.12, pip install, pytest with --ignore=tests/manual, no API keys or Chromium needed。All 5 Waves (8 tasks) completed successfully。Tests: 70/70 passed。
+
+## 2026/7/3 21:29:13 | 2026-07-07-phase-15g-engineering | execute: 对照设计检查
+- 输入：用户请求 run execute，步骤对照设计检查
+- 输出：对照设计检查完成。逐项验证结果：✅ daily_logging.py 接口、幂等、LOG_LEVEL 覆盖、OSError 降级 — 全部一致。✅ llm_client.py 脱敏日志 + 安全异常摘要 — 全部一致。✅ news_archive.py migrate_record + load 集成 — 全部一致。✅ 测试覆盖：test_llm_client(3)/test_news_archive migration(5)/test_step4(24)/test_step6(15) — 全部一致。✅ .github/workflows/test.yml push/PR/pytest — 全部一致。非目标、兼容策略、数据模型、风险应对 — 全部一致。70/70 测试通过。0 偏差。
+
+## 2026/7/3 21:30:07 | 2026-07-07-phase-15g-engineering | execute: 运行测试
+- 输入：用户请求 run execute，步骤运行测试
+- 输出：测试结果：70/70 通过。test_news_archive.py=28 passed (23 existing + 5 migration), test_llm_client.py=3 passed, test_step4.py=24 passed, test_step6.py=15 passed。CI workflow 使用 python3 -m pytest tests/ --ignore=tests/manual。本地通过。无失败项。
+
+## 2026/7/3 21:30:19 | 2026-07-07-phase-15g-engineering | execute: 代码审查
+- 输入：用户请求 run execute，步骤代码审查
+- 输出：代码审查结果：0 问题。6 个变更文件审查通过：(1) daily_logging.py — 幂等、stdout+file handler、OSError 降级、LOG_LEVEL 覆盖 (2) llm_client.py — traceback 移除、logger 脱敏、安全字段、from e 保留 (3) news_archive.py — migrate_record 正确性、load 集成简洁 (4) test_llm_client.py — 3 测试覆盖 API key 与异常脱敏 (5) test_news_archive.py — 5 测试覆盖 migration (6) test_step4.py — 24 测试覆盖 keyword/json/chunking/filter/score (7) test_step6.py — 15 测试覆盖 postprocess/contamination/CAS/CCTV/ckxx (8) .github/workflows/test.yml — push+PR+python3.12+pytest。无安全漏洞、无 TODO/FIXME、无冗余代码、架构合规。
+
+## 2026/7/3 21:30:28 | 2026-07-07-phase-15g-engineering | execute: 知识库审阅
+- 输入：用户请求 run execute，步骤知识库审阅
+- 输出：无新知识条目：.sillyspec/knowledge/uncategorized.md 不存在或为空。无需用户审阅。
+
+## 2026/7/3 21:34:27 | 2026-07-07-phase-15g-engineering | verify: 状态检查
+- 输入：用户请求 run execute → 自动进入 verify
+- 输出：状态检查通过：currentStage=验证确认
+
+## 2026/7/3 21:34:40 | 2026-07-07-phase-15g-engineering | verify: 加载规范并锚定
+- 输入：用户请求 run execute → verify
+- 输出：规范加载完成。design.md ✅ decisions.md ✅ (4 decisions D-001@v1 through D-004@v1, all accepted, no unresolved blocking decisions) plan.md ✅ tasks/*.md ✅ (8 tasks). verify-required-evidence.json 不存在（无 cannot_verify 任务）。模块文档已加载：llm-client/archiver/classifier/extractor 均 needs_review=false。local.yaml 已更新测试命令。
+
+## 2026/7/3 21:34:58 | 2026-07-07-phase-15g-engineering | verify: 逐项检查任务
+- 输入：用户请求 run execute → verify
+- 输出：逐项检查：8/8 任务 ✅ 完成。task-01: daily_logging.py ✅; task-02: llm_client.py 已接入 daily_logging ✅; task-03: tests/test_llm_client.py ✅; task-04: news_archive.py migrate_record ✅; task-05: tests/test_news_archive.py TestMigrateRecord ✅; task-06: tests/test_step4.py ✅; task-07: tests/test_step6.py ✅; task-08: .github/workflows/test.yml ✅。完成率 100%。
+
+## 2026/7/3 21:35:15 | 2026-07-07-phase-15g-engineering | verify: 对照设计检查
+- 输入：用户请求 run execute → verify
+- 输出：探针结果：探针1(未实现标记): 0 matches ✅; 探针2(设计关键词): 所有关键能力关键词在源码中有实现 ✅; 探针3(测试覆盖): 8 个 task 全部有对应测试 ✅; 探针4(决策追踪): D-001@v1→FR-01/task-01/task-02, D-002@v1→task-01/task-02/task-03, D-003@v1→task-06/task-07/task-08, D-004@v1→task-04/task-05, 全部闭环 ✅; 探针5(API Contract): 不适用。设计一致性: 实现与 design.md 一致 ✅。无 Reverse Sync 需求。模块文档一致性: llm-client 确认接口签名不变，archiver 确认 migrate_record 符合设计 ✅。
+
+## 2026/7/3 21:35:26 | 2026-07-07-phase-15g-engineering | verify: 任务蓝图验收
+- 输入：用户请求 run execute → verify
+- 输出：任务蓝图验收：所有 8 个 task 验收标准均满足。task-01: setup_logging 可重复调用且不重复 handler ✅; task-02: llm_client.py 已接入 daily_logging，异常脱敏 ✅; task-03: 3 个 LLM 脱敏测试全部通过 ✅; task-04: migrate_record 补齐默认字段，load 时自动迁移 ✅; task-05: 5 个 migration 测试全部通过 ✅; task-06: 24 个 step4 测试全部通过 ✅; task-07: 15 个 step6 测试全部通过 ✅; task-08: .github/workflows/test.yml 存在，push+PR 触发 ✅。总测试 70/70 通过 ✅。
+
+## 2026/7/3 21:35:41 | 2026-07-07-phase-15g-engineering | verify: 运行测试和质量扫描
+- 输入：用户请求 run execute → verify
+- 输出：测试结果：70/70 通过（test_llm_client=3, test_news_archive=28, test_step4=24, test_step6=15）。技术债务扫描：变更文件中 0 个 TODO/FIXME/HACK/XXX。lint: local.yaml 无 lint 命令。
+
+## 2026/7/3 21:35:55 | 2026-07-07-phase-15g-engineering | verify: 输出验证报告
+- 输入：用户请求 run execute → verify
+- 输出：验证报告已写入 verify-result.md。结论: PASS。变更风险等级: unit-sufficient。8/8 任务完成。70/70 测试通过。0 技术债务。设计一致性校验通过。决策追踪矩阵 4/4 闭环。
+
+## 2026/7/3 21:38:12 | 2026-07-07-phase-15g-engineering | archive: 任务完成度检查
+- 输入：用户请求 run archive
+- 输出：任务完成度检查：8/8 任务 checkbox 已勾选（task-01 到 task-08）。未勾选的 7 项为分散的验收标准占位标记，非任务项。
+
+## 2026/7/3 21:39:29 | 2026-07-07-phase-15g-engineering | archive: extract-module-impact
+- 输入：用户请求 run archive
+- 输出：module-impact.md 已生成。影响模块：llm-client（逻辑变更/脱敏日志）、archiver（数据结构变更/migrate_record）、classifier（新增测试）、extractor（新增测试）、orchestrator（CI配置）。未匹配：daily_logging.py（新模块待录入）。needs_review=false。
+
+## 2026/7/3 21:40:11 | 2026-07-07-phase-15g-engineering | archive: sync-module-docs [CONTINUED]
+- 回答：确认写入
+
+## 2026/7/3 21:41:36 | 2026-07-07-phase-15g-engineering | archive: 确认归档
+- 输出：确认归档
+
+## 2026/7/3 21:42:03 | 2026-07-07-phase-15g-engineering | archive: 更新路线图和提交
+- 输入：用户请求 run archive
+- 输出：归档完成。变更已移至 archive/2026-07-03-2026-07-07-phase-15g-engineering/。模块文档已更新（_module-map.yaml: llm-client paths/tests, archiver migrate_record）。ROADMAP.md 不存在，跳过。已暂存归档文件和模块文档更新。

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from news_archive import (
     normalize_url, article_id, month_path,
-    infer_source, build_record,
+    infer_source, build_record, migrate_record,
     load_month_records, write_month_records, archive_articles,
     archive_articles_best_effort,
     SCHEMA_VERSION, IMAGES_DIR, ARCHIVE_DIR,
@@ -214,6 +214,42 @@ class TestNewsArchive(unittest.TestCase):
                 new, upd = archive_articles(articles, "2026-06-29", [], dry_run=False)
             self.assertEqual(new, 1)
             self.assertEqual(upd, 0)
+
+
+class TestMigrateRecord(unittest.TestCase):
+
+    def test_migrate_v1_missing_schema_version(self):
+        original = {"url": "https://example.com/test", "title": "test"}
+        result = migrate_record(original)
+        self.assertEqual(result["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(result["body_status"], "missing")
+        self.assertEqual(result["archive_status"], "metadata-only")
+        self.assertFalse(result["selected_in_top10"])
+        self.assertNotIn("schema_version", original)
+
+    def test_migrate_current_version_unchanged(self):
+        record = {"schema_version": 2, "url": "https://example.com/test", "title": "保持原样", "body_status": "extracted"}
+        result = migrate_record(record)
+        self.assertEqual(result["title"], "保持原样")
+        self.assertEqual(result["body_status"], "extracted")
+        self.assertEqual(result["schema_version"], 2)
+
+    def test_migrate_preserves_existing_fields(self):
+        record = {"schema_version": 1, "url": "https://example.com/test", "body_status": "extracted", "selected_in_top10": True}
+        result = migrate_record(record)
+        self.assertEqual(result["body_status"], "extracted")
+        self.assertTrue(result["selected_in_top10"])
+
+    def test_migrate_fills_normalized_url(self):
+        record = {"schema_version": 1, "url": "https://example.com/my-page/"}
+        result = migrate_record(record)
+        self.assertEqual(result["normalized_url"], "example.com/my-page")
+
+    def test_migrate_updates_updated_at(self):
+        record = {"schema_version": 1, "url": "https://example.com/test"}
+        result = migrate_record(record)
+        self.assertIsInstance(result["updated_at"], str)
+        self.assertTrue(len(result["updated_at"]) > 0)
 
 
 if __name__ == "__main__":

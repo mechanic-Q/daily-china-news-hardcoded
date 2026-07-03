@@ -11,12 +11,15 @@ from __future__ import annotations
 import functools
 import os
 import sys
-import traceback
 from pathlib import Path
 from typing import Tuple, Dict, Any, List
 
 from dotenv import load_dotenv
 load_dotenv()  # 加载 .env，让所有 step 都能读到环境变量
+
+from daily_logging import setup_logging
+
+_logger = setup_logging()
 
 import yaml
 from openai import OpenAI
@@ -115,7 +118,7 @@ def call_llm(
     """一次性封装：构造 client + create + 错误处理。
 
     返回：response.choices[0].message.content
-    失败时 traceback.print_exc() 到 stderr，重抛 LLMCallError。
+    失败时日志记录脱敏信息到 _logger，重抛 LLMCallError。
     override 可覆盖 temperature/max_tokens/timeout/model。
     """
     try:
@@ -128,10 +131,15 @@ def call_llm(
         )
         return resp.choices[0].message.content
     except LLMCallError:
-        traceback.print_exc()
+        _logger.error("LLM call failed: call_site_id=%s, exception_type=%s", call_site_id, "LLMCallError")
         raise
     except Exception as e:
-        traceback.print_exc()
+        _logger.error(
+            "LLM call failed: call_site_id=%s, exception_type=%s, status_code=%s, error_code=%s",
+            call_site_id, type(e).__name__,
+            getattr(e, "status_code", None) or getattr(e, "code", None) or getattr(e, "http_status", None),
+            getattr(e, "code", None) or getattr(e, "error", None),
+        )
         raise LLMCallError(
-            f"LLM call failed at '{call_site_id}': {e}"
+            f"LLM call failed at '{call_site_id}'"
         ) from e
