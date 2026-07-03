@@ -1476,3 +1476,86 @@ needs_human_review: false
 ## 2026/7/2 18:01:52 | 2026-07-03-phase-15c-async-fetch | archive: 更新路线图和提交
 - 输入：Phase 15C async fetch 归档
 - 输出：归档完成：collector 模块文档同步，变更目录移至 archive/
+
+## 2026/7/3 14:10:41 | 2026-07-06-phase-15f-image-quality | brainstorm: 状态检查
+- 输入：sillyspec run plan --change 2026-07-06-phase-15f-image-quality
+- 输出：当前目标变更 2026-07-06-phase-15f-image-quality 处于 brainstorm 阶段；变更名有意义，无需重命名。
+
+## 2026/7/3 14:12:38 | 2026-07-06-phase-15f-image-quality | brainstorm: 加载项目上下文
+- 输入：sillyspec run plan --change 2026-07-06-phase-15f-image-quality
+- 输出：项目上下文：Daily 是 Python 3.12 新闻流水线项目，无标准 build/test/lint，完整运行命令为 ./run_all.sh，主要通过 stepN.py/脚本直接执行；运行依赖 ZHIPU_API_KEY、MINIMAX_API_KEY，输出目录为 /mnt/e/每日新中国。当前未找到 CODEBASE-OVERVIEW.md、scan 文档或 modules/_module-map.yaml，因此模块匹配只能基于现有变更文档和源码后续细化。当前活跃变更包括 phase-15a common-lib、phase-15e llm-batching、phase-15f image-quality、phase-15g engineering 等；本次需求属于 Daily 项目，相关模块初筛为 archive image enrichment/archive_enrich.py 与手工验证脚本。
+
+## 2026/7/3 14:13:00 | 2026-07-06-phase-15f-image-quality | brainstorm: 协作与复用检查
+- 输入：sillyspec run plan --change 2026-07-06-phase-15f-image-quality
+- 输出：无同名或重复 image-quality 变更；当前活跃变更中 phase-15e/15g 相邻但目标不同。全局模板目录 ~/.sillyspec/templates/ 不存在，无可复用模板。无冲突，继续。
+
+## 2026/7/3 14:13:17 | 2026-07-06-phase-15f-image-quality | brainstorm: 原型/设计图分析
+- 输入：sillyspec run plan --change 2026-07-06-phase-15f-image-quality
+- 输出：本次为后端/Python 新闻归档图片质量改进，用户未提供截图、图片或 HTML 原型。无页面结构、表单字段或交互流程需要分析，跳过原型/设计图分析。
+
+## 2026/7/3 14:13:29 | 2026-07-06-phase-15f-image-quality | brainstorm: 需求范围评估
+- 输入：sillyspec run plan --change 2026-07-06-phase-15f-image-quality
+- 输出：无需拆分。本次 Phase 15F 聚焦单一后端能力：提升归档图片候选选择与过滤质量，主要影响 archive_enrich.py 及一个手工验证脚本；不涉及 3+ 独立功能模块、角色权限、跨页面状态流转或大量模板化实例。任务规模小于批量模式阈值，按单阶段继续。
+
+## 2026/7/3 14:17:35 | 2026-07-06-phase-15f-image-quality | brainstorm: 对话式探索 [CONTINUED]
+- 回答：我现在不想收集图片了
+
+## 2026/7/3 14:34:46 | 2026-07-06-phase-15f-image-quality | brainstorm: 对话式探索 [CONTINUED]
+- 回答：改 plan 方向：保留 15F 这个变更，但目标从图片质量优化改为禁用流水线图片收集；正文归档增强继续运行，step4 自动流程不再下载/写入图片，不再消耗图片抓取预算。
+
+## 2026/7/3 14:34:51 | 2026-07-06-phase-15f-image-quality | brainstorm: 对话式探索
+- 输入：改 plan 方向
+- 输出：需求已确认：15F 保留但目标改为禁用流水线图片收集。成功标准：step4 自动归档增强仍补正文，但不再触发图片 URL 抽取、图片下载或 archive/images/YYYY-MM 写入；不新增 image_status 语义，不改归档 schema，不影响 archive_enrich.py 直接 CLI 默认行为。
+
+## 2026/7/3 14:35:24 | 2026-07-06-phase-15f-image-quality | brainstorm: 需求澄清 Grill
+- 输入：改 plan 方向
+- 输出：需求澄清 Grill skipped。已确认 15F 新方向：禁用 step4 自动流程中的图片收集/下载/本地存储，保留正文归档增强；不改 archive schema，不新增 image_status 状态，不影响 archive_enrich.py 直接 CLI 默认行为。决策 D-001@v1：type=boundary,status=accepted,source=user+code,question=禁用范围是否包含正文增强和直接 CLI,answer=仅禁用 step4 自动图片收集，正文增强继续，CLI 默认兼容,normalized_requirement=step4 调用 archive_enrich 时不会触发 enrich_image/download_image/archive/images 写入,impacts=[FR-01,task-01,verify-01],evidence=用户回答第2轮 + step4.py:646-648 + archive_enrich.py:229-325。剩余风险：历史已有 image_path/image_url 保留不清理，月报统计仍兼容旧字段。
+
+## 2026/7/3 14:37:01 | 2026-07-06-phase-15f-image-quality | brainstorm: 提出 2-3 种方案 [CONTINUED]
+- 回答：方案A
+
+## 2026/7/3 14:37:08 | 2026-07-06-phase-15f-image-quality | brainstorm: 提出 2-3 种方案
+- 输入：用户选择方案A
+- 输出：用户选择方案A：参数开关。设计决策：在 archive_enrich.enrich_records/enrich_archive/enrich_archive_best_effort 中增加 enrich_image=True 参数；step4 自动流程调用 enrich_archive_best_effort(..., enrich_image=False)；直接运行 archive_enrich.py 仍保持默认 enrich_image=True。该方案覆盖 D-001@v1，只禁用 step4 自动图片收集，不影响正文增强和 CLI 默认兼容。
+
+## 2026/7/3 14:37:41 | 2026-07-06-phase-15f-image-quality | brainstorm: 分段展示设计 [CONTINUED]
+- 回答：确认
+
+## 2026/7/3 14:37:48 | 2026-07-06-phase-15f-image-quality | brainstorm: 分段展示设计
+- 输入：用户确认设计
+- 输出：用户确认 15F 新设计：采用方案A参数开关，禁用 step4 自动图片收集但保留正文归档增强；archive_enrich.py 默认 CLI 行为保持兼容；变更名保持 2026-07-06-phase-15f-image-quality。
+
+## 2026/7/3 14:37:57 | 2026-07-06-phase-15f-image-quality | brainstorm: HTML 原型生成
+- 输入：用户确认设计
+- 输出：跳过 HTML 原型。本次 15F 是纯后端参数开关/流水线行为变更，无 UI 组件、页面布局或可交互原型价值。
+
+## 2026/7/3 14:39:35 | 2026-07-06-phase-15f-image-quality | brainstorm: 写设计文档并自审
+- 输入：用户确认设计
+- 输出：已写入并自审通过：.sillyspec/changes/2026-07-06-phase-15f-image-quality/design.md 与 decisions.md。design.md 包含目标/背景/问题描述、决策/方案选择、总体方案、文件变更清单、接口定义、数据模型、兼容策略、风险登记、决策追踪和自审；覆盖禁用 step4 自动图片收集、保留正文增强、CLI 默认兼容。
+
+## 2026/7/3 14:41:51 | 2026-07-06-phase-15f-image-quality | brainstorm: Design Grill 交叉审查
+- 输入：Design Grill 交叉审查
+- 输出：## Design Grill Result
+status: passed
+
+## Cross-Check Matrix
+| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |
+|---|---|---|---|---|---|---|
+| X-001 | consistency | FR-01 禁用图片 vs design 总体方案 | requirements.md FR-01 | design.md 总体方案 | consistent：step4 传 include_images=False 跳过图片分支 | D-001@v1 |
+| X-002 | consistency | FR-02 保留正文 vs 非目标/文件变更 | requirements.md FR-02 | archive_enrich.py enrich_records 正文分支 | consistent：只跳过图片分支，不删除正文增强调用 | D-001@v1 |
+| X-003 | feasibility | 参数名 vs 真实函数名 | design.md 原 enrich_image 参数 | archive_enrich.py enrich_image() | fixed：参数名改为 include_images，避免遮蔽同名函数 | D-002@v2 |
+| X-004 | compatibility | CLI 默认兼容 vs step4 自动禁用 | design.md 兼容策略 | step4.py 调用点 | consistent：默认 True，只有 step4 传 False | D-002@v2 |
+| X-005 | scope | tasks.md 范围 vs 非目标 | tasks.md T-01..T-03 | design.md 非目标 | consistent：不清理历史图片、不改 schema、不改月报 | none |
+
+## Question Distribution
+| 分类 | 数量 | 含义 |
+|---|---|---|
+| immediately_answered | 1 | 参数名遮蔽风险已由代码确认并修正 |
+| needs_thinking | 0 | 无需用户判断 |
+| unresolved | 0 | 无结构性漏洞 |
+
+## Unresolved Blockers
+无 P0/P1 unresolved blocker。
+
+## 2026/7/3 14:44:13 | 2026-07-06-phase-15f-image-quality | brainstorm: 用户确认并生成规范文件 [CONTINUED]
+- 回答：确认

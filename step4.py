@@ -645,7 +645,7 @@ def run(today, dry_run):
 
     try:
         import archive_enrich
-        archive_enrich.enrich_archive_best_effort(today_str, selected, dry_run=dry_run)
+        archive_enrich.enrich_archive_best_effort(today_str, selected, dry_run=dry_run, include_images=False)
     except Exception as e:
         print(f"⚠ 归档正文/首图补全失败: {e}", file=sys.stderr)
 

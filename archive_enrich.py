@@ -226,7 +226,7 @@ def enrich_image(record, today_str, dry_run=False):
     return result
 
 
-def enrich_records(today_str, records, selected=None, missing_only=False, dry_run=False, max_seconds=0):
+def enrich_records(today_str, records, selected=None, missing_only=False, dry_run=False, max_seconds=0, include_images=True):
     selected_urls = {a["url"] for a in selected} if selected else set()
     updated = []
     stats = {
@@ -246,12 +246,13 @@ def enrich_records(today_str, records, selected=None, missing_only=False, dry_ru
             if should_enrich_body(record, missing_only):
                 record["body_status"] = BODY_STATUS_SKIPPED
                 stats["body_skipped"] += 1
-            if should_enrich_image(record, missing_only):
-                record["image_status"] = IMAGE_STATUS_SKIPPED
-                stats["image_skipped"] += 1
-            elif not record.get("selected_in_top10"):
-                record.setdefault("image_status", IMAGE_STATUS_NOT_SELECTED)
-                stats["image_not_selected"] += 1
+            if include_images:
+                if should_enrich_image(record, missing_only):
+                    record["image_status"] = IMAGE_STATUS_SKIPPED
+                    stats["image_skipped"] += 1
+                elif not record.get("selected_in_top10"):
+                    record.setdefault("image_status", IMAGE_STATUS_NOT_SELECTED)
+                    stats["image_not_selected"] += 1
             record.setdefault("archive_status", ARCHIVE_STATUS_METADATA)
             updated.append(record)
             continue
@@ -264,26 +265,27 @@ def enrich_records(today_str, records, selected=None, missing_only=False, dry_ru
                 stats["body_failed"] += 1
         else:
             stats["body_skipped"] += 1
-        if should_enrich_image(record, missing_only):
-            img_update = enrich_image(record, today_str, dry_run)
-            record.update(img_update)
-            ista = img_update.get("image_status")
-            if ista == IMAGE_STATUS_DOWNLOADED:
-                stats["image_downloaded"] += 1
-            elif ista == IMAGE_STATUS_NOT_FOUND:
-                stats["image_not_found"] += 1
-            elif ista == IMAGE_STATUS_FAILED:
-                stats["image_failed"] += 1
+        if include_images:
+            if should_enrich_image(record, missing_only):
+                img_update = enrich_image(record, today_str, dry_run)
+                record.update(img_update)
+                ista = img_update.get("image_status")
+                if ista == IMAGE_STATUS_DOWNLOADED:
+                    stats["image_downloaded"] += 1
+                elif ista == IMAGE_STATUS_NOT_FOUND:
+                    stats["image_not_found"] += 1
+                elif ista == IMAGE_STATUS_FAILED:
+                    stats["image_failed"] += 1
+                else:
+                    stats["image_not_selected"] += 1
+            elif record.get("selected_in_top10"):
+                stats["image_skipped"] += 1
             else:
+                record.setdefault("image_status", IMAGE_STATUS_NOT_SELECTED)
                 stats["image_not_selected"] += 1
-        elif record.get("selected_in_top10"):
-            stats["image_skipped"] += 1
-        else:
-            record.setdefault("image_status", IMAGE_STATUS_NOT_SELECTED)
-            stats["image_not_selected"] += 1
         body_status = record.get("body_status", BODY_STATUS_MISSING)
         image_status = record.get("image_status", IMAGE_STATUS_MISSING)
-        if body_status == BODY_STATUS_EXTRACTED and image_status == IMAGE_STATUS_DOWNLOADED:
+        if include_images and body_status == BODY_STATUS_EXTRACTED and image_status == IMAGE_STATUS_DOWNLOADED:
             record["archive_status"] = ARCHIVE_STATUS_BODY_IMAGE
         elif body_status == BODY_STATUS_EXTRACTED:
             record["archive_status"] = ARCHIVE_STATUS_BODY_ENRICHED
@@ -296,7 +298,7 @@ def enrich_records(today_str, records, selected=None, missing_only=False, dry_ru
     return updated, stats
 
 
-def enrich_archive(today_str, selected=None, missing_only=False, dry_run=False, max_seconds=0):
+def enrich_archive(today_str, selected=None, missing_only=False, dry_run=False, max_seconds=0, include_images=True):
     mp = month_path(today_str)
     records = load_month_records(mp)
     if not records:
@@ -306,9 +308,10 @@ def enrich_archive(today_str, selected=None, missing_only=False, dry_run=False, 
     if not today_records:
         print(f"  当日无记录: {today_str}")
         return
-    updated, stats = enrich_records(today_str, today_records, selected, missing_only, dry_run, max_seconds)
+    updated, stats = enrich_records(today_str, today_records, selected, missing_only, dry_run, max_seconds, include_images)
     print(f"  正文: {stats['body_extracted']}提取 {stats['body_failed']}失败 {stats['body_skipped']}跳过")
-    print(f"  图片: {stats['image_downloaded']}下载 {stats['image_not_found']}无图 {stats['image_failed']}失败 {stats['image_not_selected']}非top10 {stats['image_skipped']}跳过")
+    if include_images:
+        print(f"  图片: {stats['image_downloaded']}下载 {stats['image_not_found']}无图 {stats['image_failed']}失败 {stats['image_not_selected']}非top10 {stats['image_skipped']}跳过")
     print(f"  耗时: {stats['elapsed_seconds']}秒")
     if dry_run:
         print(f"  [dry-run] 不写 JSONL，不下载图片")
@@ -320,9 +323,9 @@ def enrich_archive(today_str, selected=None, missing_only=False, dry_run=False, 
     print(f"  ✅ 已更新: {len(updated)}条 → {mp}")
 
 
-def enrich_archive_best_effort(today_str, selected=None, dry_run=False):
+def enrich_archive_best_effort(today_str, selected=None, dry_run=False, include_images=True):
     try:
-        enrich_archive(today_str, selected, missing_only=True, dry_run=dry_run, max_seconds=AUTO_MAX_SECONDS)
+        enrich_archive(today_str, selected, missing_only=True, dry_run=dry_run, max_seconds=AUTO_MAX_SECONDS, include_images=include_images)
     except Exception as e:
         traceback.print_exc()
         print(f"⚠ 归档正文/首图补全失败: {e}", file=sys.stderr)
