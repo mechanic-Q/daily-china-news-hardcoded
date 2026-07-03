@@ -1,7 +1,7 @@
 schema_version: 1
 project: Daily
 source_commit: 67748e5
-generated_at: 2026-07-02 01:33:35
+generated_at: 2026-07-03 13:10:00
 generator: sillyspec-scan
 author: lmr
 
@@ -136,6 +136,8 @@ modules:
       - minimax
       - 8 栏目
       - 涉华
+      - batch
+      - high-confidence
     aliases:
       - step4
       - 分类器
@@ -149,10 +151,18 @@ modules:
       - CHINA_DOMAINS
       - EXCLUDE_TITLES
       - EXCLUDE_NEGATIVE
+      - HIGH_CONFIDENCE_MIN_SCORE
+      - HIGH_CONFIDENCE_MARGIN
+      - LLM_BATCH_SIZE
       - is_china_related
       - is_china_source
       - llm_is_china_related
+      - llm_is_china_related_batch
       - llm_classify_single
+      - high_confidence_keyword_category
+      - score_signals_batch
+      - _strip_llm_json
+      - _extract_json_array
       - parse_0
       - score_article
     depends_on:

@@ -17,8 +17,10 @@ source_commit: 5f76a1a
 - 输入：`0新闻_粗筛.md`（上游 collector 产出，HTTP 200 验证条目 ~200 篇）
 - 输出：`1新闻_链接.md`（含栏目标签、来源、标题、URL 的精选 10 篇）
 - 涉华判定三级回退：`is_china_source`（域名白名单） → `is_china_related`（关键词） → `llm_is_china_related`（LLM 兜底）
-- 关键词加权打分：`CATEGORY_KEYWORDS` 每栏目独立 weights 词典，单标题对所有 8 栏目跑分
-- 低置信度（多栏目得分相近 / 命中模糊）时调用 `llm_classify_single` 单条仲裁
+- 关键词加权打分：`CATEGORY_KEYWORDS` 每栏目独立 weights 词典，单标题对所有 9 栏目跑分
+- 高置信关键词（`best≥6` 且 `margin≥3`）直接分栏，跳过 LLM 评分
+- 低置信度标题以 20 条为 batch 批量 LLM 涉华判断 + 栏目评分
+- batch 失败时逐条回退到单条 LLM 或关键词兜底
 
 ## LLM 调用点（⚠️ 本次变更目标）
 
@@ -30,7 +32,15 @@ source_commit: 5f76a1a
 - key 来源：`os.environ["MINIMAX_API_KEY"]`
 - 失败处理：`except Exception: return False`（静默吞错）
 
-### 2. Zhipu — 栏目仲裁
+### 2. 9router — 批量涉华判断 & 批量栏目评分（Phase 15E）
+- 位置：`step4.py:121` `llm_is_china_related_batch()`, `step4.py:412` `score_signals_batch()`
+- SDK/Provider：`llm_client.call_llm` + `llm.yaml` `9router` 配置
+- `model`：`low`（`base_url: http://localhost:20128/v1`）
+- 输入：20 条 / batch，index-based JSON prompt，`temperature=0.0`
+- 失败处理：首个 batch 失败后整轮禁用批量 → 逐条 fallback
+- 容错：`_extract_json_array()` 容忍模型返回前后说明文字
+
+### 3. Zhipu — 栏目仲裁
 - 位置：`step4.py:209` `llm_classify_single(articles)`
 - SDK：`openai.OpenAI` + 自定义 `base_url`
 - `model`：`"glm-4-flash"`（L232）
@@ -41,19 +51,27 @@ source_commit: 5f76a1a
 ## 关键逻辑（伪代码）
 
 ```
-parse_0(0新闻_粗筛.md, today)            # L115，正则提取 [date] title | url ✅
+parse_0(0新闻_粗筛.md, today)                # 正则提取 [date] title | url
   ↓
 for article in articles:
-    if any(neg in title for neg in EXCLUDE_NEGATIVE):  continue   # L28
-    if any(bad in title for bad in EXCLUDE_TITLES):    continue   # L19
-    is_china = is_china_source(url)              # L72 域名白名单
-             or is_china_related(title)          # L65 CHINA_KEYWORDS
-             or llm_is_china_related(title)      # L79 MiniMax 兜底
-    if not is_china:  continue
-    scores = score_all_categories(title)         # L200 8 栏目并行打分
+    质量/黑名单过滤 → 涉华三级判定            # source → keyword → LLM
+    涉华判定 LLM 用 batch 或逐条（见下）
   ↓
-sorted_cats = sorted(scores.items(), key=-x[1])  # L336 取最高分栏目
-若 top1/top2 得分相近 → llm_classify_single() 仲裁  # L209
+for article (through 涉华 filter):
+    cat, kw = high_confidence_keyword_category(title)  # best≥6, margin≥3
+    if cat: 直通分栏, a['score_source']='keyword-high-confidence'
+    else:  llm_candidates += [a]
+  ↓
+if llm_candidates:
+    batch_signals = score_signals_batch(llm_candidates)  # 20 条/batch, LLM column-score
+    for each article:
+        if batch signals valid:  assign category, a['score_source']='llm-batch'
+        else:  score_signals(title) single  # 单条回退
+        if still invalid:  keyword-fallback → llm_classify_single() 仲裁
+  ↓
+涉华判定（batch 路径）: llm_is_china_related_batch(china_llm_candidates)
+  每次 20 条 batch, index JSON, system message + temperature=0
+  失败自动回退到逐条 llm_is_china_related(title)
   ↓
 每栏目取最高分文章 → 汇总 top-10 → 写入 1新闻_链接.md
 ```
@@ -67,11 +85,15 @@ sorted_cats = sorted(scores.items(), key=-x[1])  # L336 取最高分栏目
 - 8 栏目：科研突破 / 农业 / 扶贫 / 能源 / 医疗 / 科技 / 材料 / 军事
 
 ## 注意事项
-- 🔴 **MiniMax model 字符串 `'minimax-m2.7'` 可能不是真实 model id**（官方常见为 `abab6.5*` 或 `MiniMax-M2`），异常被 `except Exception: return False` 静默吞掉 → 涉华兜底可能长期空跑而无报错
-- 🔴 两个 LLM 调用均无超时配置、无重试、无日志，失败只能从条数异常间接发现
+- 🔴 **MiniMax model 字符串 `'minimax-m2.7'` 可能不是真实 model id**，异常被 `except Exception: return False` 静默吞掉 → 涉华兜底可能长期空跑而无报错
+- 🔴 两个单条 LLM 调用均无超时配置、无重试、无日志；batch 调用有 `temperature=0` 和 `timeout=60s`
+- batch 涉华/评分使用 `9router` provider + `llm.yaml` 配置，不依赖 MiniMax/Zhipu
+- batch 失败采用 fail-fast：首个 batch 失败后整轮禁用批量，回退单条
+- batch JSON 容错：`_extract_json_array()` 自动剥离 think 块、markdown fence、前后说明文字
+- `DEBUG_LLM_BATCH` 环境变量可打印 batch LLM 原始返回前 200 字符
 - 修改时需同步检查的下游：extractor 读 `1新闻_链接.md`（格式：栏目标签 + 来源 + 标题 + URL）
-- 环境变量依赖：`MINIMAX_API_KEY`、`ZHIPU_API_KEY`，缺失时直接 return（无告警）
-- 文件总行数：434
+- 环境变量依赖：`MINIMAX_API_KEY`、`ZHIPU_API_KEY`（单条兜底） + `NINEROUTER_API_KEY`（batch 路径）
+- 文件总行数：约 640
 
 ## 人工备注
 
