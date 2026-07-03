@@ -10,7 +10,7 @@ source_commit: cbc7312
 # archiver
 
 ## 定位
-- 负责：新闻归档持久化（JSONL）+ 归档正文补全 + 首图提取下载
+- 负责：新闻归档持久化（JSONL）+ 归档正文补全 + 首图提取下载（直接 CLI 可用；step4 自动流水线自 Phase 15F 起默认禁用图片下载）
 - 不负责：日报流水线核心流程（collector → classifier → extractor → summarizer → renderer）
 
 ## 契约摘要
@@ -39,7 +39,8 @@ archive_enrich.py:
 
 ## 注意事项
 - 正文补全仅在 `archive_articles` 完成之后调用（通过 step4 run() 尾部的 try/except）
-- 首图仅补 top10 文章；非 top10 自动 `image_status=not_selected`
+- 首图图片：直接 CLI 调用默认 `include_images=True` 保留旧行为；step4 自动流水线传 `include_images=False` 不再下载图片
+- 首图仅补 top10 文章（`include_images=True` 时）；非 top10 自动 `image_status=not_selected`
 - `download_image` 按 Content-Type 映射扩展名，`image_path` 以最终写入路径为准
 - `max_seconds=0` 表示无限制，`max_seconds>0` 时超出精度跳过剩余
 - 不影响 `1新闻_链接.md` / `2新闻_已审核.md` / `3新闻_概述.md` / HTML / PNG 格式

@@ -244,6 +244,21 @@ class TestEnrichRecords(unittest.TestCase):
         self.assertEqual(stats["image_not_selected"], 5)
         self.assertEqual(len(updated), 5)
 
+    @mock.patch("archive_enrich.enrich_body")
+    @mock.patch("archive_enrich.enrich_image")
+    def test_include_images_false_skips_image_but_still_body(self, mock_img, mock_body):
+        selected = [{"url": "https://b.com", "title": "B"}]
+        enrich_records(self.today, self.records, selected=selected, dry_run=True, include_images=False)
+        mock_body.assert_called()
+        mock_img.assert_not_called()
+
+    @mock.patch("archive_enrich.enrich_body")
+    @mock.patch("archive_enrich.enrich_image")
+    def test_include_images_true_default_calls_image(self, mock_img, mock_body):
+        selected = [{"url": "https://b.com", "title": "B"}]
+        enrich_records(self.today, self.records, selected=selected, dry_run=True, include_images=True)
+        mock_img.assert_called()
+
 
 class TestEnrichArchiveBestEffort(unittest.TestCase):
 
@@ -256,6 +271,13 @@ class TestEnrichArchiveBestEffort(unittest.TestCase):
     def test_best_effort_catches(self, mock_enrich):
         enrich_archive_best_effort("2026-06-29")
         self.assertTrue(True)
+
+    @mock.patch("archive_enrich.enrich_archive")
+    def test_best_effort_passes_include_images(self, mock_enrich):
+        enrich_archive_best_effort("2026-06-29", include_images=False)
+        mock_enrich.assert_called_once()
+        _, kwargs = mock_enrich.call_args
+        self.assertEqual(kwargs.get("include_images"), False)
 
 
 if __name__ == "__main__":
