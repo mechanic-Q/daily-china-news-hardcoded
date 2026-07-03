@@ -95,6 +95,35 @@ def build_record(article, today_str, selected_urls):
     }
 
 
+def migrate_record(record):
+    r = record.copy()
+    version = r.get('schema_version', 1)
+
+    if version == SCHEMA_VERSION:
+        return r
+
+    if version == 1:
+        if 'normalized_url' not in r:
+            r['normalized_url'] = normalize_url(r.get('url', ''))
+        if 'selected_in_top10' not in r:
+            r['selected_in_top10'] = False
+        if 'score_source' not in r:
+            r['score_source'] = 'unknown'
+        if 'archive_status' not in r:
+            r['archive_status'] = 'metadata-only'
+        if 'body_status' not in r:
+            r['body_status'] = 'missing'
+        if 'image_status' not in r:
+            r['image_status'] = 'missing'
+        if 'updated_at' not in r:
+            r['updated_at'] = datetime.now(CST).isoformat()
+        r['schema_version'] = SCHEMA_VERSION
+        return r
+
+    r['schema_version'] = SCHEMA_VERSION
+    return r
+
+
 def load_month_records(month_path):
     records = {}
     if month_path.exists():
@@ -102,6 +131,7 @@ def load_month_records(month_path):
             line = line.strip()
             if line:
                 r = json.loads(line)
+                r = migrate_record(r)
                 records[r['id']] = r
     return records
 
