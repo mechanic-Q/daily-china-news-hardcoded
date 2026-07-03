@@ -52,5 +52,66 @@ class TestLLMErrorHandling(unittest.TestCase):
                         self.assertNotIn(fake_key, arg)
 
 
+    def test_empty_content_raises_llm_call_error(self):
+        mock_message = mock.MagicMock()
+        mock_message.content = ""
+        mock_message.reasoning_content = None
+
+        mock_choice = mock.MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+
+        mock_resp = mock.MagicMock()
+        mock_resp.choices = [mock_choice]
+
+        with mock.patch('llm_client.get_client') as mock_get:
+            mock_client = mock.MagicMock()
+            mock_get.return_value = (mock_client, "test-model", {})
+            mock_client.chat.completions.create.return_value = mock_resp
+            with self.assertRaises(LLMCallError) as ctx:
+                call_llm("test-site", [{"role": "user", "content": "test"}])
+            self.assertIn("empty content", str(ctx.exception).lower())
+
+    def test_none_content_raises_llm_call_error(self):
+        mock_message = mock.MagicMock()
+        mock_message.content = None
+        mock_message.reasoning_content = None
+
+        mock_choice = mock.MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+
+        mock_resp = mock.MagicMock()
+        mock_resp.choices = [mock_choice]
+
+        with mock.patch('llm_client.get_client') as mock_get:
+            mock_client = mock.MagicMock()
+            mock_get.return_value = (mock_client, "test-model", {})
+            mock_client.chat.completions.create.return_value = mock_resp
+            with self.assertRaises(LLMCallError) as ctx:
+                call_llm("test-site", [{"role": "user", "content": "test"}])
+            self.assertIn("empty content", str(ctx.exception).lower())
+
+    def test_whitespace_content_raises_llm_call_error(self):
+        mock_message = mock.MagicMock()
+        mock_message.content = "   \n  \t  "
+        mock_message.reasoning_content = None
+
+        mock_choice = mock.MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "length"
+
+        mock_resp = mock.MagicMock()
+        mock_resp.choices = [mock_choice]
+
+        with mock.patch('llm_client.get_client') as mock_get:
+            mock_client = mock.MagicMock()
+            mock_get.return_value = (mock_client, "test-model", {})
+            mock_client.chat.completions.create.return_value = mock_resp
+            with self.assertRaises(LLMCallError) as ctx:
+                call_llm("test-site", [{"role": "user", "content": "test"}])
+            self.assertIn("length", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

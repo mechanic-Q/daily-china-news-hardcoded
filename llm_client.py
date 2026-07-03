@@ -129,7 +129,18 @@ def call_llm(
         resp = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+        if not content or not content.strip():
+            finish_reason = resp.choices[0].finish_reason
+            rc = getattr(resp.choices[0].message, "reasoning_content", None)
+            _logger.error(
+                "LLM empty content: call_site_id=%s, finish_reason=%s, content_len=%d, reasoning_len=%d",
+                call_site_id, finish_reason, len(content or ""), len(rc or ""),
+            )
+            raise LLMCallError(
+                f"LLM returned empty content at '{call_site_id}': finish_reason={finish_reason}"
+            )
+        return content
     except LLMCallError:
         _logger.error("LLM call failed: call_site_id=%s, exception_type=%s", call_site_id, "LLMCallError")
         raise

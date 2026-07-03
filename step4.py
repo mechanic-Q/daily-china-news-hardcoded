@@ -126,6 +126,68 @@ def _extract_json_array(raw):
     return json.loads(raw)
 
 
+def _parse_china_bitstring(raw: str, expected_count: int) -> list[bool]:
+    stripped = raw.strip()
+    if any(ch not in '01' for ch in stripped):
+        raise ValueError(f"invalid chars in china bitstring, expected only '0'/'1', got: {raw!r}")
+    if len(stripped) != expected_count:
+        raise ValueError(
+            f"china bitstring length mismatch: expected {expected_count}, got {len(stripped)}, raw: {raw!r}"
+        )
+    return [ch == '1' for ch in stripped]
+
+
+def _parse_score_matrix(raw: str, expected_count: int) -> list[dict]:
+    lines = [l for l in raw.split('\n') if l.strip()]
+    if len(lines) != expected_count:
+        raise ValueError(f"expected {expected_count} rows, got {len(lines)}")
+    seen = set()
+    result = []
+    for line in lines:
+        parts = line.split('|')
+        if len(parts) != 4:
+            raise ValueError(f"malformed row (expected 4 pipe-delimited fields): {line!r}")
+        try:
+            idx = int(parts[0])
+        except ValueError:
+            raise ValueError(f"non-integer index: {parts[0]!r}")
+        if idx < 0 or idx >= expected_count:
+            raise ValueError(f"index {idx} out of range [0, {expected_count})")
+        if idx in seen:
+            raise ValueError(f"duplicate index: {idx}")
+        seen.add(idx)
+        score_strs = parts[1].split(',')
+        if len(score_strs) != 9:
+            raise ValueError(f"expected 9 relevance scores, got {len(score_strs)}: {parts[1]!r}")
+        scores = []
+        for s in score_strs:
+            try:
+                v = int(s)
+            except ValueError:
+                raise ValueError(f"non-integer relevance score: {s!r}")
+            if v < 0 or v > 10:
+                raise ValueError(f"relevance score {v} out of range [0, 10]")
+            scores.append(v)
+        try:
+            imp = int(parts[2])
+        except ValueError:
+            raise ValueError(f"non-integer importance: {parts[2]!r}")
+        if imp < 0 or imp > 10:
+            raise ValueError(f"importance {imp} out of range [0, 10]")
+        try:
+            time_ = int(parts[3])
+        except ValueError:
+            raise ValueError(f"non-integer timeliness: {parts[3]!r}")
+        if time_ < 0 or time_ > 10:
+            raise ValueError(f"timeliness {time_} out of range [0, 10]")
+        result.append({
+            "relevance": {COLUMN_ORDER[i]: scores[i] for i in range(9)},
+            "importance": imp,
+            "timeliness": time_,
+        })
+    return result
+
+
 def _chunks(items, size):
     """按固定大小切分 list。"""
     for i in range(0, len(items), size):
@@ -147,10 +209,9 @@ def llm_is_china_related_batch(articles):
         prompt_lines = [f"[{i}] {title}" for i, title in enumerate(batch_titles)]
         prompt = (
             "判断以下新闻标题是否与中国相关（报道或讨论中国事务/中国人/中国企业/中国政府/中美关系等）。"
-            "返回 JSON 数组，每项包含 index 和 is_china_related（布尔值）。\n"
-            "只输出 JSON 数组，不要输出解释、markdown 或空内容。\n\n"
-            + "\n".join(prompt_lines) +
-            '\n\nJSON格式：\n[{"index": 0, "is_china_related": true}, ...]'
+            "对每条仅回答 0（不相关）或 1（相关）。"
+            "仅输出连续的 0 和 1，不要空格、换行、序号、标点或解释文字。\n\n"
+            + "\n".join(prompt_lines)
         )
 
         try:
@@ -158,35 +219,24 @@ def llm_is_china_related_batch(articles):
             raw = call_llm(
                 "china-relevance",
                 messages=[
-                    {"role": "system", "content": "你只能输出 JSON 数组，不要输出任何其他文字。"},
+                    {"role": "system", "content": "你只输出连续的 0 和 1，不输出其他任何文字。"},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
+                extra_body={"reasoning_effort": "none"},
             )
             if os.environ.get('DEBUG_LLM_BATCH'):
                 print(f"  [DEBUG china-relevance batch] raw[:200]: {raw[:200]!r}")
-            results = _extract_json_array(raw)
-
-            if not isinstance(results, list):
-                raise ValueError("batch 返回非列表")
-
-            result_map = {}
-            for item in results:
-                idx = item.get("index")
-                val = item.get("is_china_related")
-                if not isinstance(idx, int) or not isinstance(val, bool):
-                    raise ValueError(f"类型错误: index={idx!r}, is_china_related={val!r}")
-                if idx in result_map:
-                    raise ValueError(f"重复 index: {idx}")
-                if idx < 0 or idx >= len(batch):
-                    raise ValueError(f"index {idx} 超出范围 [0, {len(batch)})")
-                result_map[idx] = val
-
-            if len(result_map) != len(batch):
-                raise ValueError(f"缺项: 期望 {len(batch)} 项，收到 {len(result_map)} 项")
+            results = _parse_china_bitstring(raw, len(batch))
 
             for i, a in enumerate(batch):
-                if result_map.get(i, False):
+                if results[i]:
+                    confirmed.append(a)
+        except ValueError:
+            print("  ⚠ china-bitstring-fallback: batch 涉华判断位串解析失败，改用单条判断")
+            batch_disabled = True
+            for a in batch:
+                if llm_is_china_related(a['title']):
                     confirmed.append(a)
         except Exception:
             import traceback
@@ -316,6 +366,17 @@ def high_confidence_keyword_category(title):
     return None, None
 
 
+def _score_by_keywords(title):
+    kw_scores = score_all_categories(title)
+    if not kw_scores:
+        return {"relevance": {col: 0 for col in COLUMN_ORDER}, "importance": 0, "timeliness": 0}
+    max_score = max(kw_scores.values())
+    relevance = {col: min(kw_scores.get(col, 0), 10) for col in COLUMN_ORDER}
+    importance = min(max_score, 10)
+    timeliness = min(max(1, max_score // 2), 10)
+    return {"relevance": relevance, "importance": importance, "timeliness": timeliness}
+
+
 def llm_classify_single(articles):
     import re
     from llm_client import call_llm
@@ -411,24 +472,21 @@ def score_signals(title, source):
     try:
         prompt = (
             f"分析以下新闻标题，从9个维度各给出0-10的relevance评分，以及importance(0-10)和timeliness(0-10)。"
-            f"只输出JSON。\n\n标题：{title}\n\n"
-            f"9维度：{', '.join(COLUMN_ORDER)}\n\n"
-            f"JSON格式：{{\"relevance\": {{\"🔬 世界性科研突破\": 0, ...}}, \"importance\": 0, \"timeliness\": 0}}"
+            f"输出一行矩阵格式：0|r1,r2,r3,r4,r5,r6,r7,r8,r9|importance|timeliness\n"
+            f"r1-r9顺序：{', '.join(COLUMN_ORDER)}\n\n"
+            f"标题：{title}\n\n"
+            f"只输出一行矩阵，不要其他文字。"
         )
-        raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}])
+        raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}], extra_body={"reasoning_effort": "none"})
         raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
-        raw = re.sub(r'^```json\s*', '', raw)
-        raw = re.sub(r'\s*```$', '', raw)
-        signals = json.loads(raw)
-        if _validate_signals(signals):
-            return signals
-        return None
+        parsed = _parse_score_matrix(raw, 1)
+        return parsed[0]
     except Exception:
-        return None
+        return _score_by_keywords(title)
 
 
 def score_signals_batch(articles):
-    """批量栏目评分；返回 signals 列表，失败项为 None。"""
+    """批量栏目评分；使用矩阵协议，失败时回退关键词评分。"""
     results = [None] * len(articles)
     col_list = ', '.join(COLUMN_ORDER)
     for batch_start in range(0, len(articles), LLM_BATCH_SIZE):
@@ -440,41 +498,26 @@ def score_signals_batch(articles):
         prompt = (
             "分析以下新闻标题，从9个维度各给出0-10的relevance评分，"
             "以及importance(0-10)和timeliness(0-10)。\n"
-            "返回 JSON 数组，每项包含 index、relevance（全部9维度）、importance、timeliness。\n\n"
-            f"9维度：{col_list}\n\n"
+            "以矩阵格式返回，每行：序号|r1,r2,r3,r4,r5,r6,r7,r8,r9|importance|timeliness\n"
+            "r1-r9对应以下9个维度的顺序。\n\n"
+            f"9维度顺序：{col_list}\n\n"
             + "\n".join(prompt_lines)
-            + '\n\nJSON格式：\n'
-            '[{"index": 0, "relevance": {"🔬 世界性科研突破": 0, ...}, "importance": 0, "timeliness": 0}, ...]'
+            + '\n\n矩阵格式示例：\n'
+            '0|8,7,6,5,4,3,2,1,0|9|3\n'
+            '1|0,1,2,3,4,5,6,7,8|2|7'
         )
         try:
-            raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}])
-            parsed = _extract_json_array(raw)
-            if not isinstance(parsed, list):
-                raise ValueError("batch 返回非列表")
-            result_map = {}
-            for item in parsed:
-                idx = item.get("index")
-                if not isinstance(idx, int):
-                    raise ValueError(f"index 类型错误: {idx!r}")
-                if idx < 0 or idx >= batch_size:
-                    raise ValueError(f"index {idx} 超出范围")
-                if idx in result_map:
-                    raise ValueError(f"重复 index: {idx}")
-                signals = {
-                    "relevance": item.get("relevance"),
-                    "importance": item.get("importance"),
-                    "timeliness": item.get("timeliness"),
-                }
-                result_map[idx] = signals if _validate_signals(signals) else None
-            if len(result_map) != batch_size:
-                raise ValueError(f"缺项: 期望 {batch_size}，收到 {len(result_map)}")
+            raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}], extra_body={"reasoning_effort": "none"})
+            parsed = _parse_score_matrix(raw, batch_size)
             for i in range(batch_size):
-                results[batch_start + i] = result_map.get(i)
+                results[batch_start + i] = parsed[i]
         except Exception:
             import traceback
             e = traceback.format_exc()
             last_line = e.strip().split('\n')[-1]
-            print(f"  ⚠ batch 栏目评分失败，回退单条调用（{batch_size} 条）: {last_line}")
+            print(f"  ⚠ batch 栏目评分失败，回退关键词评分（{batch_size} 条）: {last_line}")
+            for i, a in enumerate(batch):
+                results[batch_start + i] = _score_by_keywords(a['title'])
     return results
 
 
@@ -520,7 +563,7 @@ def build_classification_result(today):
             source = detect_source(a['url'])
             if signals is not None:
                 a['signals'] = signals
-                a['score_source'] = 'llm-batch'
+                a['score_source'] = 'matrix'
                 scores = aggregate_scores(signals)
                 cat = assign_category(signals)
                 if cat is None:
@@ -530,7 +573,7 @@ def build_classification_result(today):
                 signals_single = score_signals(a['title'], source)
                 if signals_single is not None:
                     a['signals'] = signals_single
-                    a['score_source'] = 'llm'
+                    a['score_source'] = 'matrix'
                     scores = aggregate_scores(signals_single)
                     cat = assign_category(signals_single)
                     if cat is None:

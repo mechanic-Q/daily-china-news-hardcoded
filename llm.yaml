@@ -1,16 +1,16 @@
 call_sites:
   china-relevance:
-    max_tokens: 2048
+    max_tokens: 262144
     temperature: 0.7
-    timeout: 60
+    timeout: 120
   column-classify:
     max_tokens: 2048
     temperature: 0.7
     timeout: 60
   column-score:
-    max_tokens: 256
+    max_tokens: 262144
     temperature: 0.0
-    timeout: 30
+    timeout: 120
   summarize:
     max_tokens: 512
     temperature: 0.7
