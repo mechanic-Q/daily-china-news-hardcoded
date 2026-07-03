@@ -11,6 +11,7 @@ Step 4: 栏目分类筛选 — 从 0新闻_粗筛.md 生成 1新闻_链接.md
 
 import datetime
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -24,6 +25,11 @@ WORLD_CLASS_CATEGORY = '🔬 世界性科研突破'
 AGG_RELEV_BASE = 0.5
 AGG_IMP_W = 0.3
 AGG_TIME_W = 0.2
+
+HIGH_CONFIDENCE_MIN_SCORE = 6
+HIGH_CONFIDENCE_MARGIN = 3
+
+LLM_BATCH_SIZE = 20
 
 EXCLUDE_TITLES = [
     '春雨落', '百谷生', '谷雨', '舞蹈诗剧', '三月三', '时装周',
@@ -97,6 +103,101 @@ def llm_is_china_related(title):
         import traceback
         traceback.print_exc()
         return False
+
+
+def _strip_llm_json(raw):
+    """去除 think 块和 markdown fence，返回可 json.loads 的字符串。"""
+    raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL)
+    raw = re.sub(r'^```(?:json)?\s*', '', raw)
+    raw = re.sub(r'\s*```$', '', raw)
+    return raw.strip()
+
+
+def _extract_json_array(raw):
+    """从 LLM 返回文本中提取第一个 JSON 数组，容忍前后说明文字。"""
+    if not raw or not raw.strip():
+        raise ValueError("empty LLM response")
+    raw = _strip_llm_json(raw)
+    if raw.startswith('['):
+        return json.loads(raw)
+    m = re.search(r'\[.*?\]', raw, re.DOTALL)
+    if m:
+        return json.loads(m.group())
+    return json.loads(raw)
+
+
+def _chunks(items, size):
+    """按固定大小切分 list。"""
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def llm_is_china_related_batch(articles):
+    """批量涉华判断；返回通过涉华判断的 article 列表，失败时按 batch 回退单条 llm_is_china_related。"""
+    confirmed = []
+    batch_disabled = False
+    for batch in _chunks(articles, LLM_BATCH_SIZE):
+        if batch_disabled:
+            for a in batch:
+                if llm_is_china_related(a['title']):
+                    confirmed.append(a)
+            continue
+
+        batch_titles = [a['title'] for a in batch]
+        prompt_lines = [f"[{i}] {title}" for i, title in enumerate(batch_titles)]
+        prompt = (
+            "判断以下新闻标题是否与中国相关（报道或讨论中国事务/中国人/中国企业/中国政府/中美关系等）。"
+            "返回 JSON 数组，每项包含 index 和 is_china_related（布尔值）。\n"
+            "只输出 JSON 数组，不要输出解释、markdown 或空内容。\n\n"
+            + "\n".join(prompt_lines) +
+            '\n\nJSON格式：\n[{"index": 0, "is_china_related": true}, ...]'
+        )
+
+        try:
+            from llm_client import call_llm
+            raw = call_llm(
+                "china-relevance",
+                messages=[
+                    {"role": "system", "content": "你只能输出 JSON 数组，不要输出任何其他文字。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+            )
+            if os.environ.get('DEBUG_LLM_BATCH'):
+                print(f"  [DEBUG china-relevance batch] raw[:200]: {raw[:200]!r}")
+            results = _extract_json_array(raw)
+
+            if not isinstance(results, list):
+                raise ValueError("batch 返回非列表")
+
+            result_map = {}
+            for item in results:
+                idx = item.get("index")
+                val = item.get("is_china_related")
+                if not isinstance(idx, int) or not isinstance(val, bool):
+                    raise ValueError(f"类型错误: index={idx!r}, is_china_related={val!r}")
+                if idx in result_map:
+                    raise ValueError(f"重复 index: {idx}")
+                if idx < 0 or idx >= len(batch):
+                    raise ValueError(f"index {idx} 超出范围 [0, {len(batch)})")
+                result_map[idx] = val
+
+            if len(result_map) != len(batch):
+                raise ValueError(f"缺项: 期望 {len(batch)} 项，收到 {len(result_map)} 项")
+
+            for i, a in enumerate(batch):
+                if result_map.get(i, False):
+                    confirmed.append(a)
+        except Exception:
+            import traceback
+            e = traceback.format_exc()
+            last_line = e.strip().split('\n')[-1]
+            print(f"  ⚠ batch 涉华判断不可用，本轮改用单条 fallback: {last_line}")
+            batch_disabled = True
+            for a in batch:
+                if llm_is_china_related(a['title']):
+                    confirmed.append(a)
+    return confirmed
 
 
 def parse_0(path, today):
@@ -201,6 +302,18 @@ def score_all_categories(title):
         if s > 0:
             scores[cat] = s
     return scores
+
+
+def high_confidence_keyword_category(title):
+    kw_scores = score_all_categories(title)
+    if not kw_scores:
+        return None, None
+    sorted_cats = sorted(kw_scores.items(), key=lambda x: -x[1])
+    best_cat, best_score = sorted_cats[0]
+    second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
+    if best_score >= HIGH_CONFIDENCE_MIN_SCORE and (best_score - second_score) >= HIGH_CONFIDENCE_MARGIN:
+        return best_cat, kw_scores
+    return None, None
 
 
 def llm_classify_single(articles):
@@ -314,6 +427,57 @@ def score_signals(title, source):
         return None
 
 
+def score_signals_batch(articles):
+    """批量栏目评分；返回 signals 列表，失败项为 None。"""
+    results = [None] * len(articles)
+    col_list = ', '.join(COLUMN_ORDER)
+    for batch_start in range(0, len(articles), LLM_BATCH_SIZE):
+        batch = articles[batch_start:batch_start + LLM_BATCH_SIZE]
+        batch_size = len(batch)
+        prompt_lines = []
+        for i, a in enumerate(batch):
+            prompt_lines.append(f"[{i}] {a['title']}")
+        prompt = (
+            "分析以下新闻标题，从9个维度各给出0-10的relevance评分，"
+            "以及importance(0-10)和timeliness(0-10)。\n"
+            "返回 JSON 数组，每项包含 index、relevance（全部9维度）、importance、timeliness。\n\n"
+            f"9维度：{col_list}\n\n"
+            + "\n".join(prompt_lines)
+            + '\n\nJSON格式：\n'
+            '[{"index": 0, "relevance": {"🔬 世界性科研突破": 0, ...}, "importance": 0, "timeliness": 0}, ...]'
+        )
+        try:
+            raw = call_llm("column-score", messages=[{"role": "user", "content": prompt}])
+            parsed = _extract_json_array(raw)
+            if not isinstance(parsed, list):
+                raise ValueError("batch 返回非列表")
+            result_map = {}
+            for item in parsed:
+                idx = item.get("index")
+                if not isinstance(idx, int):
+                    raise ValueError(f"index 类型错误: {idx!r}")
+                if idx < 0 or idx >= batch_size:
+                    raise ValueError(f"index {idx} 超出范围")
+                if idx in result_map:
+                    raise ValueError(f"重复 index: {idx}")
+                signals = {
+                    "relevance": item.get("relevance"),
+                    "importance": item.get("importance"),
+                    "timeliness": item.get("timeliness"),
+                }
+                result_map[idx] = signals if _validate_signals(signals) else None
+            if len(result_map) != batch_size:
+                raise ValueError(f"缺项: 期望 {batch_size}，收到 {len(result_map)}")
+            for i in range(batch_size):
+                results[batch_start + i] = result_map.get(i)
+        except Exception:
+            import traceback
+            e = traceback.format_exc()
+            last_line = e.strip().split('\n')[-1]
+            print(f"  ⚠ batch 栏目评分失败，回退单条调用（{batch_size} 条）: {last_line}")
+    return results
+
+
 def build_classification_result(today):
     today_str = today.strftime("%Y-%m-%d")
     input_path = BASE_DIR / today_str / "0新闻_粗筛.md"
@@ -331,51 +495,72 @@ def build_classification_result(today):
             china_pass.append(a)
         elif is_china_source(a["url"]):
             china_llm.append(a)
-    llm_confirmed = []
-    for a in china_llm:
-        if llm_is_china_related(a["title"]):
-            llm_confirmed.append(a)
+    llm_confirmed = llm_is_china_related_batch(china_llm) if china_llm else []
     articles = china_pass + llm_confirmed
 
     classified = {col: [] for col in COLUMN_ORDER}
     llm_fail_count = 0
 
+    llm_candidates = []
     for a in articles:
-        source = detect_source(a['url'])
-        signals = score_signals(a['title'], source)
-        if signals is not None:
-            a['signals'] = signals
-            a['score_source'] = 'llm'
-            scores = aggregate_scores(signals)
-            cat = assign_category(signals)
-            if cat is None:
-                continue
-            priority = scores.get(cat, 0)
-        else:
-            llm_fail_count += 1
-            kw_scores = score_all_categories(a['title'])
-            if not kw_scores:
-                continue
-            try:
-                sorted_cats = sorted(kw_scores.items(), key=lambda x: -x[1])
-                best_cat, best_score = sorted_cats[0]
-                second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
-                if best_score >= 4 and (best_score - second_score) >= 2:
-                    cat = best_cat
-                else:
-                    try:
-                        results = llm_classify_single([a])
-                        cat = results.get(a['title']) or best_cat
-                    except Exception:
-                        cat = best_cat
-            except Exception:
-                cat = max(kw_scores, key=kw_scores.get)
+        cat_high, kw_scores_high = high_confidence_keyword_category(a['title'])
+        if cat_high is not None:
             a['signals'] = None
-            a['score_source'] = 'keyword-fallback'
-            priority = priority_score(a['title'], cat) + kw_scores.get(cat, 0)
-        a['category'] = cat
-        a['priority'] = priority
-        classified[cat].append(a)
+            a['score_source'] = 'keyword-high-confidence'
+            a['category'] = cat_high
+            a['priority'] = priority_score(a['title'], cat_high) + kw_scores_high.get(cat_high, 0)
+            classified[cat_high].append(a)
+            continue
+        llm_candidates.append(a)
+
+    if llm_candidates:
+        batch_signals = score_signals_batch(llm_candidates)
+        for idx, a in enumerate(llm_candidates):
+            signals = batch_signals[idx]
+            source = detect_source(a['url'])
+            if signals is not None:
+                a['signals'] = signals
+                a['score_source'] = 'llm-batch'
+                scores = aggregate_scores(signals)
+                cat = assign_category(signals)
+                if cat is None:
+                    continue
+                priority = scores.get(cat, 0)
+            else:
+                signals_single = score_signals(a['title'], source)
+                if signals_single is not None:
+                    a['signals'] = signals_single
+                    a['score_source'] = 'llm'
+                    scores = aggregate_scores(signals_single)
+                    cat = assign_category(signals_single)
+                    if cat is None:
+                        continue
+                    priority = scores.get(cat, 0)
+                else:
+                    llm_fail_count += 1
+                    kw_scores = score_all_categories(a['title'])
+                    if not kw_scores:
+                        continue
+                    try:
+                        sorted_cats = sorted(kw_scores.items(), key=lambda x: -x[1])
+                        best_cat, best_score = sorted_cats[0]
+                        second_score = sorted_cats[1][1] if len(sorted_cats) > 1 else 0
+                        if best_score >= 4 and (best_score - second_score) >= 2:
+                            cat = best_cat
+                        else:
+                            try:
+                                results = llm_classify_single([a])
+                                cat = results.get(a['title']) or best_cat
+                            except Exception:
+                                cat = best_cat
+                    except Exception:
+                        cat = max(kw_scores, key=kw_scores.get)
+                    a['signals'] = None
+                    a['score_source'] = 'keyword-fallback'
+                    priority = priority_score(a['title'], cat) + kw_scores.get(cat, 0)
+            a['category'] = cat
+            a['priority'] = priority
+            classified[cat].append(a)
 
     if articles:
         llm_fail_pct = llm_fail_count / len(articles) * 100
