@@ -202,8 +202,13 @@ def run(today, dry_run):
 
     content = input_path.read_text("utf-8")
     articles = []
-    for m in re.finditer(r'### \[(.*?)\] (.*?)\nURL：(https?://[^\s]+)', content):
-        articles.append({'src': m.group(1), 'title': m.group(2), 'url': m.group(3)})
+    for m in re.finditer(r'### \[(.*?)\] (.*?)\nURL：(https?://[^\s]+)(?:\n发布时间：(\d{4}-\d{2}-\d{2}))?', content):
+        articles.append({
+            'src': m.group(1),
+            'title': m.group(2),
+            'url': m.group(3),
+            'published_at': m.group(4) or '未知',
+        })
 
     print(f"共 {len(articles)} 条，提取正文中...\n")
 
@@ -228,7 +233,7 @@ def run(today, dry_run):
     lines = [f"# {today_str} 新闻（已审核）\n"]
     for a in articles:
         lines.append(f"\n## 【{a['src']}】{a['title']}\n")
-        lines.append(f"来源：{a['src']}  发布时间：{today_str}\n")
+        lines.append(f"来源：{a['src']}  发布时间：{a['published_at']}\n")
         lines.append(f"正文：{a['body']}\n")
 
     output_path = BASE_DIR / today_str / "2新闻_已审核.md"

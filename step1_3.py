@@ -182,6 +182,65 @@ def fetch_title(html):
     return ""
 
 
+def _fmt_date_from_yyyymmdd(raw):
+    if not raw or len(raw) != 8:
+        return None
+    return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+
+
+def _date_from_url(url):
+    for pat in [r'/((?:20)\d{6})/', r't((?:20)\d{6})_', r'((?:20)\d{6})']:
+        m = re.search(pat, url)
+        if m:
+            return _fmt_date_from_yyyymmdd(m.group(1))
+    m = re.search(r'/((?:20)\d{2})/(\d{2})/(\d{2})/', url)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return None
+
+
+def _date_from_html(html):
+    patterns = [
+        r'(?:发布时间|发布日期|发稿时间|时间)[:：]\s*((?:20)\d{2})[-年](\d{1,2})[-月](\d{1,2})',
+        r'<meta[^>]+(?:property|name)=["\'](?:article:published_time|pubdate|publishdate|publishdate)["\'][^>]+content=["\']((?:20)\d{2})[-/](\d{1,2})[-/](\d{1,2})',
+    ]
+    for pat in patterns:
+        m = re.search(pat, html, re.I)
+        if m:
+            y, mo, d = m.group(1), int(m.group(2)), int(m.group(3))
+            return f"{y}-{mo:02d}-{d:02d}"
+    return None
+
+
+def fetch_published_at(url):
+    date = _date_from_url(url)
+    if date:
+        return date
+    try:
+        return _date_from_html(fetch_html_static(url, timeout=10))
+    except Exception:
+        return None
+
+
+def _article(url, title, published_at=None):
+    return {"url": url, "title": title, "published_at": published_at}
+
+
+def split_by_publish_date(items, today):
+    today_str = today.strftime("%Y-%m-%d")
+    passed, failed = [], []
+    for item in items:
+        published_at = item.get("published_at")
+        item["published_at"] = published_at
+        if not published_at:
+            failed.append({"item": item, "reason": "无可信发布日期"})
+        elif published_at != today_str:
+            failed.append({"item": item, "reason": f"非当日发布:{published_at}"})
+        else:
+            passed.append(item)
+    return passed, failed
+
+
 async def http_200_async(session, url):
     """异步 HTTP 检查"""
     try:
@@ -211,7 +270,7 @@ def fetch_xinhuanet(today):
     for u in urls:
         t = anchor_titles.get(u) or fetch_url_title(u)
         if t:
-            results.append({"url": u, "title": t})
+            results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
@@ -249,7 +308,7 @@ def fetch_ckxx(today):
             key = u.split("/")[-1].split(".")[0]
             if key not in seen:
                 seen.add(key)
-                results.append({"url": u, "title": title})
+                results.append(_article(u, title, createtime[:10]))
 
     return results
 
@@ -270,7 +329,7 @@ def fetch_cctv_news(today):
         seen.add(u)
         t = clean_anchor_text(t_raw) or fetch_url_title(u)
         if t and len(t) > 4:
-            results.append({"url": u, "title": t})
+            results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
@@ -290,15 +349,15 @@ def fetch_cctv_military(today):
         seen.add(u)
         t = clean_anchor_text(t_raw) or fetch_url_title(u)
         if t and len(t) > 4:
-            results.append({"url": u, "title": t})
+            results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
 def fetch_cas(today):
-    """中科院: urllib 首页 → 匹配 YYYYMM 前缀"""
+    """中科院: urllib 首页 → URL 发布日期必须为当天。"""
     html = fetch_html_static("https://www.cas.cn/", timeout=15)
-    yyyymm = today.strftime("%Y%m")
-    raw_urls = re.findall(rf'//www\.cas\.cn/\.\./\.\./([^"\'\s]*{yyyymm}[^"\'\s]*\.shtml)', html)
+    today8 = today.strftime("%Y%m%d")
+    raw_urls = re.findall(rf'//www\.cas\.cn/\.\./\.\./([^"\'\s]*t{today8}_[^"\'\s]*\.shtml)', html)
     seen = set()
     urls = []
     for raw in raw_urls:
@@ -313,15 +372,19 @@ def fetch_cas(today):
         if h:
             t = fetch_title(h)
             if t:
-                results.append({"url": u, "title": t})
+                results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
 def fetch_cnnc_chromium(today):
     """中核集团 → 方案1: cnnc.com.cn"""
-    html = fetch_home_html("https://www.cnnc.com.cn/", required_selectors=[r'cnnc\.com\.cn'])
+    try:
+        html = fetch_html_static("https://www.cnnc.com.cn/", timeout=8)
+    except Exception:
+        return []
+    today8 = today.strftime("%Y%m%d")
     links_titles = re.findall(
-        r'<a[^>]+href=["\']([^"\']*cnnc[^"\']*202[56]\d{4}[^"\']*)["\'][^>]*>(.*?)</a>',
+        r'<a[^>]+href=["\']([^"\']*cnnc[^"\']*' + today8 + r'[^"\']*)["\'][^>]*>(.*?)</a>',
         html,
         re.DOTALL | re.IGNORECASE
     )
@@ -330,21 +393,30 @@ def fetch_cnnc_chromium(today):
         t = clean_anchor_text(title)
         if t and len(t) > 3:
             u = href if href.startswith("http") else f"https://www.cnnc.com.cn{href}"
-            results.append({"url": u, "title": t})
+            results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
 def fetch_cnnc_cnnpn(today):
     """中核集团 → 方案2: cnnpn.cn 聚合站（CF 绕过）"""
-    html = fetch_home_html("https://www.cnnpn.cn/", required_selectors=[r'cnnpn\.cn.*?article'])
-    links = re.findall(r'href=["\']([^"\']*cnnpn\.cn[^"\']*article[^"\']*)["\']', html)
-    links = list(dict.fromkeys(links))
+    try:
+        html = fetch_html_static("https://www.cnnpn.cn/", timeout=8)
+    except Exception:
+        return []
+    anchors = re.findall(r'<a[^>]+href=["\']([^"\']*cnnpn\.cn[^"\']*article[^"\']*)["\'][^>]*>(.*?)</a>', html, re.S | re.I)
+    seen = set()
     results = []
-    for l in links[:8]:
+    for l, raw_title in anchors:
+        if l in seen:
+            continue
+        seen.add(l)
         u = l if l.startswith("http") else f"https://www.cnnpn.cn{l}" if l.startswith("/") else f"https://www.cnnpn.cn/{l}"
-        t = fetch_url_title(u)
+        published_at = _date_from_url(u)
+        t = clean_anchor_text(raw_title)
         if t and len(t) > 4:
-            results.append({"url": u, "title": t})
+            results.append(_article(u, t, published_at))
+        if len(results) >= 8:
+            break
     return results
 
 
@@ -392,7 +464,7 @@ def fetch_rmrb(today):
         if h:
             t = fetch_title(h)
             if t:
-                results.append({"url": u, "title": t})
+                results.append(_article(u, t, today.strftime("%Y-%m-%d")))
     return results
 
 
@@ -404,6 +476,10 @@ async def verify_http(items, today):
     """通用 HTTP 200 验证（Python 不编造 URL，仅确认页面可达）"""
     if not items:
         return [], [], []
+
+    items, date_failed = split_by_publish_date(items, today)
+    if not items:
+        return [], date_failed, []
 
     connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit=30)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -417,7 +493,7 @@ async def verify_http(items, today):
         else:
             failed.append({"item": item, "reason": "HTTP非200"})
 
-    return passed, failed, []
+    return passed, date_failed + failed, []
 
 
 # ============================================================
@@ -450,7 +526,10 @@ def write_0(today, entries, dry_run):
 
         for item in passed:
             t = item["title"].replace("\n", " ")[:80]
-            lines.append(f"- [{today_str}] {t} | {item['url']} ✅")
+            published_at = item.get("published_at") or item.get("date")
+            if not published_at:
+                raise ValueError(f"通过条目缺少 published_at: {item['url']}")
+            lines.append(f"- [{published_at}] {t} | {item['url']} ✅")
 
         for f_item in failed:
             it = f_item["item"]

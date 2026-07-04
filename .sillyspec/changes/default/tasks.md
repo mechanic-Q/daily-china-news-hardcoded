@@ -81,3 +81,5 @@ phase: 13
 - 命令：`rg "^from typing\|-> (dict|str|int|None|list|tuple|bool)" step4.py`
 - 覆盖：D-010@v1
 - 验收：AC-08
+
+- [x] ql-20260704-002-a4d1 强制采集见报/发布日期为当天的新闻

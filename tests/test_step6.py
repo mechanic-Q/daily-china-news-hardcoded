@@ -1,6 +1,9 @@
 import sys
+import datetime
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -8,6 +11,7 @@ from step6 import (
     _postprocess_text, _is_contaminated,
     _people_postprocess, _cas_postprocess, _cctv_postprocess,
     _extract_ckxx_content_txt,
+    run,
 )
 
 
@@ -91,3 +95,25 @@ class TestCkxxExtract(unittest.TestCase):
     def test_extract_ckxx_content_txt_not_found(self):
         html = "<html><body>no content</body></html>"
         self.assertIsNone(_extract_ckxx_content_txt(html))
+
+
+class TestRunDatePropagation(unittest.TestCase):
+
+    def test_run_uses_upstream_published_at(self):
+        today = datetime.date(2026, 7, 4)
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("step6.BASE_DIR", Path(tmp)), \
+             mock.patch("step6.fetch_and_extract", return_value=("正文内容", None)):
+            workdir = Path(tmp) / "2026-07-04"
+            workdir.mkdir()
+            (workdir / "1新闻_链接.md").write_text(
+                "# 2026-07-04 精选新闻\n\n"
+                "## 🚀 科技\n\n"
+                "### [人民日报] 测试新闻\n"
+                "URL：https://example.com/a\n"
+                "发布时间：2026-07-04\n",
+                encoding="utf-8",
+            )
+            run(today, dry_run=False)
+            content = (workdir / "2新闻_已审核.md").read_text("utf-8")
+        self.assertIn("来源：人民日报  发布时间：2026-07-04", content)
