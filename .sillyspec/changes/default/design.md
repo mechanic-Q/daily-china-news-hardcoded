@@ -25,9 +25,10 @@ status: draft
 |----|------|
 | G-01 | 单次 LLM 调用为每篇文章输出 **8 栏目 relevance + importance + timeliness** 结构化评分 |
 | G-02 | 用确定性聚合公式产生归属 + 栏目内排序，替代 `score_all_categories + priority_score` 拼接 |
-| G-03 | LLM 失败 / JSON 非法 / Schema 不全 时**自动降级**到现有关键词链路，零中断 |
+| G-03 | batch LLM 失败 / JSON 非法 / Schema 不全 时先重试并回退逐条 LLM；仅逐条 LLM 也失败时才进入显式 `keyword-fallback`，不得把关键词结果伪装为 LLM 评分 |
 | G-04 | 不破坏 `1新闻_链接.md` 输出格式（下游 step6 契约不变） |
 | G-05 | 全天调用预算 ≤ 250 次 GLM 调用、step4 P95 ≤ 10 min |
+| G-06 | 候选新闻必须有可信见报/发布日期且等于目标日期；正文事件日期可早于目标日期 |
 
 ## 3. 非目标
 
@@ -39,6 +40,13 @@ status: draft
 - **不删除** `CATEGORY_KEYWORDS` 词典（保留作 fallback 数据源；本期为 🤖 新栏增补关键词）
 - **不改** `1新闻_链接.md` 行级格式（`### [{源}] {标题}` + `URL：{url}`）；但栏目集合从 8 → 9，空栏目不再写 heading（§4.2）
 - **不深改** step7 / step8 逻辑，仅同步 `COLUMN_ORDER` 常量增加 🤖 一项
+
+## Quick 补充：见报/发布日期硬闸门
+
+- collector 输出的每条通过候选必须携带真实 `published_at`，且 `published_at == --date`。
+- 无可信发布日期或发布日期不等于目标日期的候选进入淘汰列表，不得写入通过列表。
+- `0新闻_粗筛.md`、`1新闻_链接.md`、`2新闻_已审核.md` 必须传递真实发布日期，不得用运行日期伪造发布时间。
+- 日期闸门只约束文章见报/发布日期，不约束正文描述的事件发生日期。
 
 ## 4. 总体方案
 

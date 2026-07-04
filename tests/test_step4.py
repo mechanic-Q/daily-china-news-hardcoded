@@ -1,5 +1,7 @@
 import datetime
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,11 +12,11 @@ from daily.common import COLUMN_ORDER
 from step4 import (
     is_china_related, is_china_source,
     _strip_llm_json, _extract_json_array,
-    _parse_china_bitstring, _parse_score_matrix,
+    _parse_china_json_array, _parse_score_json_array,
     _chunks, is_quality_news,
     score_all_categories, high_confidence_keyword_category,
-    llm_is_china_related_batch, score_signals_batch,
-    build_classification_result,
+    llm_is_china_related_batch, score_signals, score_signals_batch,
+    build_classification_result, run,
 )
 
 
@@ -129,87 +131,131 @@ class TestHighConfidenceCategory(unittest.TestCase):
         self.assertIsNone(scores)
 
 
-class TestParseChinaBitstring(unittest.TestCase):
+def make_signals(base=5):
+    return {
+        "relevance": {col: base for col in COLUMN_ORDER},
+        "importance": base,
+        "timeliness": base,
+    }
+
+
+class TestParseChinaJsonArray(unittest.TestCase):
 
     def test_valid(self):
-        self.assertEqual(_parse_china_bitstring("101", 3), [True, False, True])
+        raw = '[{"index": 0, "is_china_related": true}, {"index": 1, "is_china_related": false}]'
+        self.assertEqual(_parse_china_json_array(raw, 2), [True, False])
 
     def test_valid_empty(self):
-        self.assertEqual(_parse_china_bitstring("", 0), [])
+        self.assertEqual(_parse_china_json_array("[]", 0), [])
 
     def test_length_mismatch(self):
         with self.assertRaises(ValueError):
-            _parse_china_bitstring("10", 3)
+            _parse_china_json_array('[{"index": 0, "is_china_related": true}]', 2)
 
-    def test_invalid_chars(self):
+    def test_invalid_type(self):
         with self.assertRaises(ValueError):
-            _parse_china_bitstring("10x1", 4)
+            _parse_china_json_array('[{"index": 0, "is_china_related": "true"}]', 1)
 
 
-class TestParseScoreMatrix(unittest.TestCase):
+class TestParseScoreJsonArray(unittest.TestCase):
 
     def test_valid_2rows(self):
-        raw = "0|8,7,6,5,4,3,2,1,0|9|3\n1|0,1,2,3,4,5,6,7,8|2|7"
-        result = _parse_score_matrix(raw, 2)
+        raw = json.dumps([
+            {"index": 0, **make_signals(8)},
+            {"index": 1, **make_signals(3)},
+        ], ensure_ascii=False)
+        result = _parse_score_json_array(raw, 2)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["relevance"]["🔬 世界性科研突破"], 8)
-        self.assertEqual(result[0]["relevance"]["🎖️ 军事"], 0)
-        self.assertEqual(result[0]["importance"], 9)
-        self.assertEqual(result[0]["timeliness"], 3)
-        self.assertEqual(result[1]["relevance"]["🔬 世界性科研突破"], 0)
-        self.assertEqual(result[1]["relevance"]["🎖️ 军事"], 8)
-        self.assertEqual(result[1]["importance"], 2)
-        self.assertEqual(result[1]["timeliness"], 7)
+        self.assertEqual(result[1]["importance"], 3)
 
     def test_missing_row(self):
-        raw = "0|1,2,3,4,5,6,7,8,9|5|5"
+        raw = json.dumps([{"index": 0, **make_signals()}], ensure_ascii=False)
         with self.assertRaises(ValueError):
-            _parse_score_matrix(raw, 2)
+            _parse_score_json_array(raw, 2)
 
     def test_dup_index(self):
-        raw = "0|1,2,3,4,5,6,7,8,9|5|5\n0|9,8,7,6,5,4,3,2,1|3|4"
+        raw = json.dumps([
+            {"index": 0, **make_signals()},
+            {"index": 0, **make_signals()},
+        ], ensure_ascii=False)
         with self.assertRaises(ValueError):
-            _parse_score_matrix(raw, 2)
+            _parse_score_json_array(raw, 2)
 
-    def test_wrong_column_count(self):
-        raw = "0|1,2,3,4,5,6,7,8|5|5"
+    def test_wrong_schema(self):
+        signals = make_signals()
+        del signals["relevance"][COLUMN_ORDER[0]]
+        raw = json.dumps([{"index": 0, **signals}], ensure_ascii=False)
         with self.assertRaises(ValueError):
-            _parse_score_matrix(raw, 1)
+            _parse_score_json_array(raw, 1)
 
     def test_out_of_range(self):
-        raw = "0|1,2,3,4,5,6,7,8,11|5|5"
+        raw = json.dumps([{"index": 2, **make_signals()}], ensure_ascii=False)
         with self.assertRaises(ValueError):
-            _parse_score_matrix(raw, 1)
+            _parse_score_json_array(raw, 1)
 
 
 class TestBatchE2E(unittest.TestCase):
 
-    def test_china_bitstring_batch(self):
+    def test_china_json_batch(self):
         articles = [
             {"title": "中国经济发展新成就", "url": "https://example.com/1"},
             {"title": "美国大选最新进展", "url": "https://example.com/2"},
             {"title": "北京冬奥会筹备顺利", "url": "https://example.com/3"},
         ]
-        with mock.patch('llm_client.call_llm', return_value="101"):
+        raw = json.dumps([
+            {"index": 0, "is_china_related": True},
+            {"index": 1, "is_china_related": False},
+            {"index": 2, "is_china_related": True},
+        ])
+        with mock.patch('llm_client.call_llm', return_value=raw):
             result = llm_is_china_related_batch(articles)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]['title'], articles[0]['title'])
         self.assertEqual(result[1]['title'], articles[2]['title'])
 
-    def test_score_matrix_batch(self):
+    def test_china_batch_retries_before_single_fallback(self):
+        articles = [
+            {"title": "中国经济发展新成就", "url": "https://example.com/1"},
+            {"title": "美国大选最新进展", "url": "https://example.com/2"},
+        ]
+        raw = json.dumps([
+            {"index": 0, "is_china_related": True},
+            {"index": 1, "is_china_related": False},
+        ])
+        with mock.patch('llm_client.call_llm', side_effect=["bad", raw]) as call:
+            result = llm_is_china_related_batch(articles)
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(result, [articles[0]])
+
+    def test_score_json_batch(self):
         articles = [
             {"title": "AI新突破", "url": "https://example.com/1"},
             {"title": "航母军演", "url": "https://example.com/2"},
         ]
-        matrix = "0|9,8,7,6,5,4,3,2,1|9|5\n1|1,2,3,4,5,6,7,8,9|3|8"
-        with mock.patch('step4.call_llm', return_value=matrix):
+        raw = json.dumps([
+            {"index": 0, **make_signals(9)},
+            {"index": 1, **make_signals(4)},
+        ], ensure_ascii=False)
+        with mock.patch('step4.call_llm', return_value=raw):
             result = score_signals_batch(articles)
         self.assertEqual(len(result), 2)
         for signals in result:
+            self.assertIsNotNone(signals)
             self.assertIn('relevance', signals)
             self.assertIn('importance', signals)
             self.assertIn('timeliness', signals)
             self.assertEqual(len(signals['relevance']), 9)
+
+    def test_score_batch_failure_returns_none_for_single_llm_fallback(self):
+        articles = [{"title": "AI新突破", "url": "https://example.com/1"}]
+        with mock.patch('step4.call_llm', side_effect=["bad", "still bad"]):
+            result = score_signals_batch(articles)
+        self.assertEqual(result, [None])
+
+    def test_score_signals_failure_does_not_fake_keyword_signals(self):
+        with mock.patch('step4.call_llm', return_value="not json"):
+            self.assertIsNone(score_signals("AI新突破", "新华社"))
 
     def test_e2e_signals_flow(self):
         today = datetime.date(2026, 7, 4)
@@ -218,17 +264,32 @@ class TestBatchE2E(unittest.TestCase):
             "title": "中美经贸摩擦最新动态",
             "url": "https://example.com/news/123",
         }
-        matrix = "0|9,8,7,6,5,4,3,2,1|9|5"
+        raw = json.dumps([{"index": 0, **make_signals(9)}], ensure_ascii=False)
         with mock.patch('step4.parse_0', return_value=[article]), \
-             mock.patch('step4.call_llm', return_value=matrix):
+             mock.patch('step4.call_llm', return_value=raw):
             classified, selected = build_classification_result(today)
         all_articles = [a for items in classified.values() for a in items]
         self.assertEqual(len(all_articles), 1)
         result = all_articles[0]
         self.assertIsNotNone(result.get('signals'))
-        self.assertNotEqual(result.get('score_source'), 'keyword-fallback')
+        self.assertEqual(result.get('score_source'), 'llm-batch')
         self.assertIn('category', result)
         self.assertIn('priority', result)
+
+    def test_e2e_batch_failure_uses_single_llm_not_keyword_fake(self):
+        today = datetime.date(2026, 7, 4)
+        article = {
+            "date": "2026-07-04",
+            "title": "中美经贸摩擦最新动态",
+            "url": "https://example.com/news/123",
+        }
+        with mock.patch('step4.parse_0', return_value=[article]), \
+             mock.patch('step4.score_signals_batch', return_value=[None]), \
+             mock.patch('step4.score_signals', return_value=make_signals(8)):
+            classified, selected = build_classification_result(today)
+        result = [a for items in classified.values() for a in items][0]
+        self.assertEqual(result.get('score_source'), 'llm')
+        self.assertIsNotNone(result.get('signals'))
 
     def test_archive_compatibility(self):
         from news_archive import build_record
@@ -241,7 +302,7 @@ class TestBatchE2E(unittest.TestCase):
                 "importance": 5,
                 "timeliness": 5,
             },
-            "score_source": "matrix",
+            "score_source": "llm-batch",
             "category": "🚀 科技",
             "priority": 4.35,
         }
@@ -251,7 +312,29 @@ class TestBatchE2E(unittest.TestCase):
         self.assertIn('category', record)
         self.assertIn('priority', record)
         self.assertTrue(record['selected_in_top10'])
-        self.assertEqual(record['score_source'], 'matrix')
+        self.assertEqual(record['score_source'], 'llm-batch')
+
+    def test_run_writes_published_at_to_selected_links(self):
+        today = datetime.date(2026, 7, 4)
+        article = {
+            "url": "https://example.com/news/123",
+            "title": "中美经贸摩擦最新动态",
+            "date": "2026-07-04",
+            "column": "🚀 科技",
+            "priority": 7,
+        }
+        classified = {col: [] for col in COLUMN_ORDER}
+        classified["🚀 科技"] = [article]
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("step4.BASE_DIR", Path(tmp)), \
+             mock.patch("step4.build_classification_result", return_value=(classified, [article])), \
+             mock.patch("news_archive.archive_articles_best_effort"), \
+             mock.patch("archive_enrich.enrich_archive_best_effort"):
+            (Path(tmp) / "2026-07-04").mkdir()
+            run(today, dry_run=False)
+            content = (Path(tmp) / "2026-07-04" / "1新闻_链接.md").read_text("utf-8")
+        self.assertIn("URL：https://example.com/news/123", content)
+        self.assertIn("发布时间：2026-07-04", content)
 
 
 if __name__ == "__main__":

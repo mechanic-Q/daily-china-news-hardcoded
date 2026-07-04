@@ -33,7 +33,7 @@ source_commit: 5f76a1a
 ## 契约摘要
 - 命令行入口 `python step1_3.py [--date YYYY-MM-DD] [--dry-run]`，由 `parse_args` 解析参数、由 `init` 创建/复用当日工作目录。
 - 7 信源以**串行**方式调用各自的 `fetch_*` 函数（详见"关键逻辑"），每个 fetcher 返回 `[{"url": ..., "title": ...}, ...]`，不抛异常时由 `main` 的 try/except 兜底。
-- 采集结果通过 `verify_http` + `http_200_async` 用 aiohttp **并发**做 HTTP-200 校验（`TCPConnector(limit=30)`，单 URL `aiohttp.ClientTimeout(total=12)`），分流为 `passed` / `failed`。
+- 采集结果先执行见报/发布日期硬闸门：每条 item 必须有可信 `published_at == --date`，否则淘汰；通过日期闸门后再由 `verify_http` + `http_200_async` 用 aiohttp **并发**做 HTTP-200 校验（`TCPConnector(limit=30)`，单 URL `aiohttp.ClientTimeout(total=12)`），分流为 `passed` / `failed`。
 - 抓取手段三选一：①外部 chromium 子进程 `chromium_dom`（新华社、央视、央视军事、中核首选）；②`urllib.request` 静态抓 HTML（中科院、人民日报）；③JSON API（参考消息）。
 - 最终产物：当日工作目录下的 `0新闻_粗筛.md`（utf-8），每个信源一节，列出"通过/淘汰/工具/状态"，被 classifier (step4) 作为输入。
 - `--dry-run` 模式只 print 前 3000 字预览，不落盘。
@@ -71,7 +71,7 @@ main():
 
 ## 注意事项
 - chromium 渲染走外部子进程（`chromium_dom`，默认 `timeout=35s`、`budget=20000` 字节），依赖宿主机 snap chromium v147（路径写死在 `CHROMIUM` 常量），CI / 容器 / 别的发行版部署时需自行确认可用，否则 4 个 chromium 信源会全军覆没。
-- HTTP-200 校验**只判可达性，不判内容时效**，因此每个 fetcher 自己要在 URL 模式里把"当日日期"卡死（如 `fetch_cnnc_chromium` 用 `202[56]\d{4}` 正则、`fetch_xinhuanet` 用日期片段），否则会混入旧闻。新增信源时同样要遵守"日期内置在 URL 正则"的约定。
+- HTTP-200 校验**只判可达性，不判内容时效**；时效由 `published_at` 硬闸门负责。每个 fetcher 必须提供可信见报/发布日期（URL 日期、API createtime、版面日期或页面明确发布时间），且 `published_at == --date` 才能进入通过列表；缺日期或非当天必须淘汰，不得用运行日期补写。
 - 中核集团有 3 级回退（`fetch_cnnc_chromium` → `fetch_cnnc_cnnpn` → ...），改造时注意 `main` 里对"中核集团"做了**特判** —— 这个 fetcher 返回 `(items, tool)` 元组而非 `items`，因为 tool 名取决于实际命中的回退层级。
 - 任一信源 fetcher 抛异常会被 `main` 的 `except` 吞掉、记为 0 条，**不会阻断后续信源**；想加新信源时按 `(name, fetcher, tool)` 元组追加到 `SOURCES` 列表即可，无需改 `main`。
 - aiohttp 并发上限 `limit=30`、单 URL `timeout=12s`，对慢站点（如人民日报某些版面）可能直接 fail；如需放宽，改 `verify_http` 中的 `TCPConnector` 和 `aiohttp.ClientTimeout`。
@@ -82,5 +82,9 @@ main():
 ## 人工备注
 
 <!-- MANUAL_NOTES_START -->
+
+## 变更索引
+
+- ql-20260704-002-a4d1 | 强制采集见报/发布日期为当天的新闻
 
 <!-- MANUAL_NOTES_END -->

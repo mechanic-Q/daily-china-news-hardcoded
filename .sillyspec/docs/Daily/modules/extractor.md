@@ -15,7 +15,7 @@ updated_at: 2026-07-02 01:33:35
 - 不负责：URL 候选选择与去重（classifier / step4）；摘要与日报生成（summarizer / step7）；正文 LLM 改写或润色
 
 ## 契约摘要
-- 上游输入：`1新闻_链接.md`（10 条经 classifier 精选的 URL）
+- 上游输入：`1新闻_链接.md`（10 条经 classifier 精选的 URL，含 `发布时间：YYYY-MM-DD`）
 - 下游输出：`2新闻_已审核.md`（标题 + 正文纯文本）
 - 抓取双通道：
   - 静态：`fetch_html_static(url)` — urllib 直取
@@ -39,7 +39,7 @@ for (title, url) in items:
         body2 = extract_body(html2, url)
         text  = _postprocess_text(body2, url)
         if _is_contaminated(text): skip
-    append (title, text) → 2新闻_已审核.md
+    append (title, published_at, text) → 2新闻_已审核.md
 ```
 
 正文抽取（`extract_body` 内部，step6.py:55）：
@@ -85,5 +85,9 @@ for (title, url) in items:
 ## 人工备注
 
 <!-- MANUAL_NOTES_START -->
+
+## 变更索引
+
+- ql-20260704-002-a4d1 | 强制采集见报/发布日期为当天的新闻
 
 <!-- MANUAL_NOTES_END -->
