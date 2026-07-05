@@ -47,9 +47,10 @@ for each item:
                 # too_short / too_long / body_copy / cot_leak / None
             if reason is None: return cleaned
             failures.add(reason); sleep(1); 继续重试
-    if summary is None:
-        summary = fallback_summarize(title, body)   # 首句+末句
-写入 3新闻_概述.md（按 COLUMN_ORDER 分栏目排序）
+     if summary is None:
+         summary = fallback_summarize(title, body)   # 首句+末句
+     summary = summary.replace("习近平", "")         # 敏感词清洗
+ 写入 3新闻_概述.md（按 COLUMN_ORDER 分栏目排序）
 ```
 
 ## 注意事项
@@ -80,4 +81,7 @@ for each item:
 
 <!-- MANUAL_NOTES_START -->
 
+## 变更索引
+
+- ql-20260704-003-ef92 | Step7 新闻概述正文删除习近平三字
 <!-- MANUAL_NOTES_END -->
