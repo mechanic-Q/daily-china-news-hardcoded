@@ -192,11 +192,15 @@ def run(today, dry_run):
     for key, a1 in news1.items():
         if key in news2:
             a2 = news2[key]
+            body = a2.get("body", "")
+            if body.startswith("[正文提取失败:"):
+                print(f"\n❌ 检测到正文提取失败的条目，pipeline 终止: [{a2['src']}] {a1['title'][:40]}")
+                raise SystemExit(1)
             matched.append({
                 "title": a1["title"],
                 "category": a1["category"],
                 "src": a2["src"],
-                "body": a2["body"],
+                "body": body,
             })
         else:
             print(f"  ⚠ 未匹配到正文: {a1['title'][:40]}")

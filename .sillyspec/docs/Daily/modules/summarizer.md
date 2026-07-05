@@ -14,6 +14,7 @@ source_commit: 5f76a1a
 - 不负责：栏目分类（classifier）、版式渲染（renderer）
 - 上游：extractor（产出 `2新闻_已审核.md`）
 - 下游：renderer（消费 `3新闻_概述.md`）
+- **正文质量闸门**：run() 开头检查每条正文是否以 `[正文提取失败:` 开头；命中则 raise SystemExit(1)，不生成摘要
 
 ## 契约摘要
 - LLM 唯一可控环节：诊断失败原因 → 注入针对性修复提示 → 重试 ×3（attempt 0/1/2）
@@ -84,4 +85,5 @@ for each item:
 ## 变更索引
 
 - ql-20260704-003-ef92 | Step7 新闻概述正文删除习近平三字
+- ql-20260705-001-b3e8 | Step6/7 正文提取必须成功，失败则 pipeline fail closed
 <!-- MANUAL_NOTES_END -->

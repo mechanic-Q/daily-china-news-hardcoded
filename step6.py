@@ -158,12 +158,23 @@ def needs_chromium(url):
     return any(k in url for k in ['cctv.com', 'military.cctv', 'cnnc.com.cn', 'news.cctv'])
 
 
+def _fetch_any(url):
+    methods = [fetch_html_static, fetch_html_static, chromium_dom]
+    if needs_chromium(url):
+        methods = [chromium_dom, fetch_html_static, fetch_html_static]
+    for fn in methods:
+        try:
+            html = fn(url)
+            if html and len(html) >= 500:
+                return html
+        except Exception:
+            continue
+    return None
+
+
 def fetch_and_extract(url, title):
     try:
-        if needs_chromium(url):
-            html = chromium_dom(url)
-        else:
-            html = fetch_html_static(url)
+        html = _fetch_any(url)
         if not html or len(html) < 500:
             return None, "页面过短或为空"
         body = extract_body(html, url)
@@ -220,13 +231,22 @@ def run(today, dry_run):
             results[idx] = (body, err)
 
     success = 0
+    failures = []
     for idx, a in enumerate(articles):
         body, err = results.get(idx, (None, "unknown"))
-        a['body'] = body or f'[正文提取失败: {err or "未知错误"}]'
+        a['body'] = body or err or "未知错误"
         status = '✅' if body else '❌'
-        print(f"  {status} [{a['src']}] {a['title'][:40]}... ({len(a['body'])}字)")
+        print(f"  {status} [{a['src']}] {a['title'][:40]}... ({len(a['body'])}字)" if body else f"  {status} [{a['src']}] {a['title'][:40]}... ❌ {err}")
         if body:
             success += 1
+        else:
+            failures.append(f"[{a['src']}] {a['title'][:40]} — {err}")
+
+    if failures:
+        print(f"\n❌ 正文提取失败: {len(failures)} 条，pipeline 终止。")
+        for f in failures:
+            print(f"  {f}")
+        raise SystemExit(1)
 
     print(f"\n成功: {success}/{len(articles)}")
 

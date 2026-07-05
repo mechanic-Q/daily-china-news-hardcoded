@@ -25,3 +25,9 @@ created_at: 2026-07-01 14:51:33
 关联变更：default
 文件：step7.py, tests/test_step7.py
 结果：summarize_article_worker 在 LLM 和规则回退摘要收敛后新增 summary.replace("习近平", "")；仅处理正文，不影响标题/link/来源。新增 tests/test_step7.py: 3 个测试覆盖 LLM、回退、无敏感词场景。全量 164 passed。
+
+## ql-20260705-001-b3e8 | 2026-07-05 18:00:00 | Step6/7 正文提取必须成功，失败则 pipeline fail closed
+状态：已完成
+关联变更：default
+文件：step6.py, step7.py, tests/test_step6.py, tests/test_step7.py
+结果：step6 fetch_and_extract 重写为 _fetch_any 多路重试链：静态抓取失败→静默重试→fallback Chromium；CCTV 优先 Chromium→回退静态。run() 改为 fail closed：正文提取失败 raise SystemExit(1)，不再写占位正文。step7 在 run() 开头拒绝 [正文提取失败:] 正文。新增测试覆盖 fallback、fail-closed 两种行为。全量 169 passed。

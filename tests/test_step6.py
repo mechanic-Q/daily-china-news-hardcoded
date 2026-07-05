@@ -11,6 +11,7 @@ from step6 import (
     _postprocess_text, _is_contaminated,
     _people_postprocess, _cas_postprocess, _cctv_postprocess,
     _extract_ckxx_content_txt,
+    fetch_and_extract,
     run,
 )
 
@@ -117,3 +118,52 @@ class TestRunDatePropagation(unittest.TestCase):
             run(today, dry_run=False)
             content = (workdir / "2新闻_已审核.md").read_text("utf-8")
         self.assertIn("来源：人民日报  发布时间：2026-07-04", content)
+
+
+class TestFetchAndExtractFallback(unittest.TestCase):
+
+    def test_fallback_on_static_ssl_error(self):
+        with \
+            mock.patch("step6.chromium_dom", return_value=("<html>" + "x" * 1000 + "</html>")), \
+            mock.patch("step6.fetch_html_static", side_effect=[None, Exception("SSL EOF")]):
+            body, err = fetch_and_extract("https://example.com/a", "t")
+        self.assertIsNone(err)
+        self.assertIsNotNone(body)
+
+    def test_fallback_on_chromium_empty_to_static(self):
+        with \
+            mock.patch("step6.chromium_dom", return_value=""), \
+            mock.patch("step6.fetch_html_static", return_value="<html>" + "x" * 1000 + "</html>"), \
+            mock.patch("step6.extract_body", return_value="正文内容"), \
+            mock.patch("step6._postprocess_text", return_value="正文内容"):
+            body, err = fetch_and_extract("https://military.cctv.com/article", "t")
+        self.assertIsNotNone(body)
+
+    def test_fail_closed_on_all_fallbacks_fail(self):
+        with \
+            mock.patch("step6.chromium_dom", return_value=""), \
+            mock.patch("step6.fetch_html_static", return_value=None):
+            body, err = fetch_and_extract("https://military.cctv.com/article", "t")
+        self.assertIsNone(body)
+        self.assertIsNotNone(err)
+
+
+class TestRunFailClosed(unittest.TestCase):
+
+    def test_run_raises_system_exit_on_failure(self):
+        today = datetime.date(2026, 7, 5)
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("step6.BASE_DIR", Path(tmp)), \
+             mock.patch("step6.fetch_and_extract", return_value=(None, "模拟失败")):
+            workdir = Path(tmp) / "2026-07-05"
+            workdir.mkdir()
+            (workdir / "1新闻_链接.md").write_text(
+                "# 2026-07-05 精选新闻\n\n"
+                "## 🚀 科技\n\n"
+                "### [人民日报] 测试新闻\n"
+                "URL：https://example.com/a\n"
+                "发布时间：2026-07-05\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(SystemExit):
+                run(today, dry_run=False)
