@@ -169,6 +169,7 @@ def summarize_article_worker(index, article):
     if not summary:
         summary = fallback_summarize(article['title'], article['body'])
         fallback = True
+    summary = summary.replace("习近平", "")
     return index, summary, fallback
 
 

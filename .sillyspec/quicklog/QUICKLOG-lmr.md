@@ -19,3 +19,9 @@ created_at: 2026-07-01 14:51:33
 关联变更：default
 文件：step1_3.py, step4.py, step6.py, tests/test_step1_3.py, tests/test_step4.py, tests/test_step6.py, .sillyspec/changes/default/design.md, .sillyspec/docs/Daily/modules/collector.md, .sillyspec/docs/Daily/modules/classifier.md, .sillyspec/docs/Daily/modules/extractor.md
 结果：collector 增加可信 published_at 硬闸门，见报/发布日期必须等于 --date；中科院只收 tYYYYMMDD_ 当天 URL；中核/cnnpn 无可信日期不进入通过列表；0/1/2 文件传递真实发布时间，不再用运行日期伪造。新增/更新测试覆盖日期解析、同日闸门、Step4/Step6 日期传递；/usr/bin/python3 -m pytest tests/ -q 161 passed；2026-07-04 dry-run 完成且旧中科院 t20260702 不再进入候选。
+
+## ql-20260704-003-ef92 | 2026-07-04 22:59:00 | Step7 新闻概述正文删除习近平三字
+状态：已完成
+关联变更：default
+文件：step7.py, tests/test_step7.py
+结果：summarize_article_worker 在 LLM 和规则回退摘要收敛后新增 summary.replace("习近平", "")；仅处理正文，不影响标题/link/来源。新增 tests/test_step7.py: 3 个测试覆盖 LLM、回退、无敏感词场景。全量 164 passed。
