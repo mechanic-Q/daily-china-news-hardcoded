@@ -39,5 +39,20 @@ class TestXijinpingRemoval(unittest.TestCase):
             self.assertEqual(summary, "今天天气不错")
 
 
+class TestOverviewSourceLabel(unittest.TestCase):
+
+    def test_run_output_has_source_prefix(self):
+        with \
+            mock.patch("step7.parse_1news", return_value={"key": {"title": "测试", "category": "🚀 科技"}}), \
+            mock.patch("step7.parse_2news", return_value={"key": {"title": "测试", "src": "新华社", "body": "正文"}}), \
+            mock.patch("step7.llm_summarize", return_value="摘要"), \
+            mock.patch("step7.BASE_DIR", Path("/tmp")):
+            import datetime, io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                step7.run(datetime.date(2026, 7, 5), dry_run=True)
+            self.assertIn("### [新华社] 测试", buf.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

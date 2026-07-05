@@ -237,7 +237,7 @@ def run(today, dry_run):
         lines.append(f"\n## {col}\n")
         if col_articles:
             for a in col_articles:
-                lines.append(f"### {a['title']}")
+                lines.append(f"### [{a['src']}] {a['title']}")
                 lines.append(a["summary"])
                 lines.append("")
         else:

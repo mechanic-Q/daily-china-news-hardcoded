@@ -31,3 +31,15 @@ created_at: 2026-07-01 14:51:33
 关联变更：default
 文件：step6.py, step7.py, tests/test_step6.py, tests/test_step7.py
 结果：step6 fetch_and_extract 重写为 _fetch_any 多路重试链：静态抓取失败→静默重试→fallback Chromium；CCTV 优先 Chromium→回退静态。run() 改为 fail closed：正文提取失败 raise SystemExit(1)，不再写占位正文。step7 在 run() 开头拒绝 [正文提取失败:] 正文。新增测试覆盖 fallback、fail-closed 两种行为。全量 169 passed。
+
+## ql-20260705-002-1c3a | 2026-07-05 18:29:33 | Step7/8 概述新闻标注标准新闻来源
+状态：已完成
+关联变更：default
+文件：step7.py, tests/test_step7.py
+结果：step7 run() 输出 `### {title}` → `### [{src}] {title}`，来源取自 step4 上游 src 字段，LLM 不参与来源判断。step8 parse_md 天然兼容 `[来源] 标题` 格式，无需改动。全量 170 passed。
+
+## ql-20260705-003-f77d | 2026-07-05 19:37:43 | Step1 HTTP验证至少试3次，失败原因明确
+状态：已完成
+关联变更：default
+文件：step1_3.py, tests/test_step1_3.py
+结果：http_200_async() 改为最多试 3 次，每次间隔 0.5s/1s；返回 (ok, reason) 元组；verify_http() 写入真实原因（HTTP 500/timeout/SSL EOF），不再统一写 HTTP非200。aiohttp session 加 User-Agent: Mozilla/5.0。新增测试覆盖成功/失败reasons。全量 172 passed。

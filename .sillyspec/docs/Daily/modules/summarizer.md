@@ -51,7 +51,7 @@ for each item:
      if summary is None:
          summary = fallback_summarize(title, body)   # 首句+末句
      summary = summary.replace("习近平", "")         # 敏感词清洗
- 写入 3新闻_概述.md（按 COLUMN_ORDER 分栏目排序）
+ 写入 3新闻_概述.md：`### [{src}] title` + summary（来源从 upstream `src` 字段取）
 ```
 
 ## 注意事项
@@ -86,4 +86,5 @@ for each item:
 
 - ql-20260704-003-ef92 | Step7 新闻概述正文删除习近平三字
 - ql-20260705-001-b3e8 | Step6/7 正文提取必须成功，失败则 pipeline fail closed
+- ql-20260705-002-1c3a | Step7/8 概述新闻标注标准新闻来源
 <!-- MANUAL_NOTES_END -->

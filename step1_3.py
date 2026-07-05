@@ -242,12 +242,23 @@ def split_by_publish_date(items, today):
 
 
 async def http_200_async(session, url):
-    """异步 HTTP 检查"""
-    try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=12), ssl=ssl_ctx) as r:
-            return r.status == 200
-    except Exception:
-        return False
+    """异步 HTTP 检查（最多试 3 次，返回 (ok, reason)）"""
+    reasons = []
+    for attempt in range(3):
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=12), ssl=ssl_ctx) as r:
+                if r.status == 200:
+                    return True, None
+                reasons.append(f"HTTP {r.status}")
+        except asyncio.TimeoutError:
+            reasons.append("timeout")
+        except aiohttp.ClientError as e:
+            reasons.append(str(e))
+        except Exception as e:
+            reasons.append(str(e))
+        if attempt < 2:
+            await asyncio.sleep(0.5 * (attempt + 1))
+    return False, "; ".join(reasons)
 
 
 # ============================================================
@@ -482,16 +493,16 @@ async def verify_http(items, today):
         return [], date_failed, []
 
     connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit=30)
-    async with aiohttp.ClientSession(connector=connector) as session:
+    async with aiohttp.ClientSession(connector=connector, headers={"User-Agent": "Mozilla/5.0"}) as session:
         urls = [it["url"] for it in items]
-        statuses = await asyncio.gather(*[http_200_async(session, u) for u in urls])
+        results = await asyncio.gather(*[http_200_async(session, u) for u in urls])
 
     passed, failed = [], []
-    for item, ok in zip(items, statuses):
+    for item, (ok, reason) in zip(items, results):
         if ok:
             passed.append(item)
         else:
-            failed.append({"item": item, "reason": "HTTP非200"})
+            failed.append({"item": item, "reason": reason or "HTTP非200"})
 
     return passed, date_failed + failed, []
 

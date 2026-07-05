@@ -73,7 +73,7 @@ class TestSameDayGate(unittest.TestCase):
             {"title": "今日", "url": "https://example.com/a", "published_at": "2026-07-04"},
             {"title": "旧闻", "url": "https://example.com/b", "published_at": "2026-07-02"},
         ]
-        with mock.patch("step1_3.http_200_async", return_value=True):
+        with mock.patch("step1_3.http_200_async", return_value=(True, None)):
             passed, failed, _ = asyncio.run(verify_http(items, today))
         self.assertEqual([x["title"] for x in passed], ["今日"])
         self.assertEqual(len(failed), 1)
@@ -93,6 +93,25 @@ class TestSameDayGate(unittest.TestCase):
         content = write_text.call_args.args[0]
         self.assertIn("[2026-07-03] 测试标题", content)
         self.assertNotIn("[2026-07-04] 测试标题", content)
+
+
+class TestHttp200Async(unittest.TestCase):
+
+    def test_verify_http_passes_on_success(self):
+        today = datetime.date(2026, 7, 4)
+        items = [{"title": "a", "url": "https://ex.com/a", "published_at": "2026-07-04"}]
+        with mock.patch("step1_3.http_200_async", return_value=(True, None)):
+            passed, failed, _ = asyncio.run(verify_http(items, today))
+        self.assertEqual(len(passed), 1)
+        self.assertEqual(len(failed), 0)
+
+    def test_verify_http_real_reason_on_failure(self):
+        today = datetime.date(2026, 7, 4)
+        items = [{"title": "a", "url": "https://ex.com/a", "published_at": "2026-07-04"}]
+        with mock.patch("step1_3.http_200_async", return_value=(False, "HTTP 500")):
+            passed, failed, _ = asyncio.run(verify_http(items, today))
+        self.assertEqual(len(passed), 0)
+        self.assertEqual(failed[0]["reason"], "HTTP 500")
 
 
 if __name__ == "__main__":
