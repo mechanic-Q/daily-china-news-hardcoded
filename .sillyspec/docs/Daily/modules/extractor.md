@@ -20,7 +20,7 @@ updated_at: 2026-07-02 01:33:35
 - 抓取双通道：
   - 静态：`fetch_html_static(url)` — urllib 直取
   - JS 渲染：`chromium_dom(url)` — `chromium --dump-dom`，120s 超时 + `TimeoutExpired` 捕获
-- 路由规则：`needs_chromium(url)` 命中 → 走 chromium，否则 urllib
+- 路由规则：`needs_chromium(url)` 命中 → 优先 chromium（失败→静态），否则优先静态（失败→重试→chromium）；所有方法失败时 pipeline fail closed
 - 正文抽取：`trafilatura.extract` 优先，`ckxxapp`/`cankaoxiaoxi` JS 字面量页退回到 `_extract_ckxx_content_txt` fallback
 - 站点后处理：`SITE_POSTPROCESS` registry 按 URL 匹配 CAS/People/CCTV 专用清理函数，再执行通用清理（HTML unescape、视频 UI 残片剥离、空白归一、重复句去重）
 - 污染检测：识别 CSS/JS 残片、导航集合、`enpproperty` 标记、地址+邮编模板；命中则尝试退回更激进清洗再判一次
@@ -89,5 +89,6 @@ for (title, url) in items:
 ## 变更索引
 
 - ql-20260704-002-a4d1 | 强制采集见报/发布日期为当天的新闻
+- ql-20260705-001-b3e8 | Step6/7 正文提取必须成功，失败则 pipeline fail closed
 
 <!-- MANUAL_NOTES_END -->
