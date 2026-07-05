@@ -224,7 +224,6 @@ def build_html(target_date, sections, left_sections, right_sections):
       justify-content: space-between;
       align-items: end;
       border-top: 6px solid var(--line);
-      border-bottom: 2px solid var(--line);
       padding: 8px 0 5px;
       margin-bottom: 8px;
     }}
