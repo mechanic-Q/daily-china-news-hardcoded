@@ -242,12 +242,23 @@ def split_by_publish_date(items, today):
 
 
 async def http_200_async(session, url):
-    """异步 HTTP 检查"""
-    try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=12), ssl=ssl_ctx) as r:
-            return r.status == 200
-    except Exception:
-        return False
+    """异步 HTTP 检查（最多试 3 次，返回 (ok, reason)）"""
+    reasons = []
+    for attempt in range(3):
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=12), ssl=ssl_ctx) as r:
+                if r.status == 200:
+                    return True, None
+                reasons.append(f"HTTP {r.status}")
+        except asyncio.TimeoutError:
+            reasons.append("timeout")
+        except aiohttp.ClientError as e:
+            reasons.append(str(e))
+        except Exception as e:
+            reasons.append(str(e))
+        if attempt < 2:
+            await asyncio.sleep(0.5 * (attempt + 1))
+    return False, "; ".join(reasons)
 
 
 # ============================================================
@@ -284,14 +295,21 @@ def fetch_ckxx(today):
 
     for alias in aliases:
         url = f"https://china.cankaoxiaoxi.com/json/channel/{alias}/list.json?_t={ts}"
-        try:
-            req_ = Request(url, headers={
-                "User-Agent": "Mozilla/5.0",
-                "Referer": "https://china.cankaoxiaoxi.com/"
-            })
-            data = json.loads(urlopen(req_, timeout=8, context=ssl_ctx).read())
-        except Exception as e:
-            print(f"    频道 {alias} 失败: {e}")
+        data = None
+        for attempt in range(3):
+            try:
+                req_ = Request(url, headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": "https://china.cankaoxiaoxi.com/"
+                })
+                data = json.loads(urlopen(req_, timeout=15, context=ssl_ctx).read())
+                break
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(1 * (attempt + 1))
+                    continue
+                print(f"    频道 {alias} 失败: {e}")
+        if data is None:
             continue
 
         for item in data.get("list", []):
@@ -354,18 +372,18 @@ def fetch_cctv_military(today):
 
 
 def fetch_cas(today):
-    """中科院: urllib 首页 → URL 发布日期必须为当天。"""
-    html = fetch_html_static("https://www.cas.cn/", timeout=15)
+    """中科院: urllib + chromium 降级 → URL 发布日期必须为当天。"""
+    html = fetch_home_html("https://www.cas.cn/")
+    if not html:
+        return []
     today8 = today.strftime("%Y%m%d")
-    raw_urls = re.findall(rf'//www\.cas\.cn/\.\./\.\./([^"\'\s]*t{today8}_[^"\'\s]*\.shtml)', html)
+    raw_urls = re.findall(rf'href=["\']\./([^"\'\s]*t{today8}_[^"\'\s]*\.shtml)["\']', html)
     seen = set()
     urls = []
     for raw in raw_urls:
-        parts = [p for p in raw.split("/") if p and p != ".."]
-        u = f"https://www.cas.cn/{'/'.join(parts)}"
-        if u not in seen:
-            seen.add(u)
-            urls.append(u)
+        if raw not in seen:
+            seen.add(raw)
+            urls.append(f"https://www.cas.cn/{raw}")
     htmls = _fetch_many_sync(urls)
     results = []
     for u, h in zip(urls, htmls):
@@ -377,10 +395,9 @@ def fetch_cas(today):
 
 
 def fetch_cnnc_chromium(today):
-    """中核集团 → 方案1: cnnc.com.cn"""
-    try:
-        html = fetch_html_static("https://www.cnnc.com.cn/", timeout=8)
-    except Exception:
+    """中核集团 → 方案1: cnnc.com.cn（chromium 降级绕过 WAF）"""
+    html = fetch_home_html("https://www.cnnc.com.cn/")
+    if not html:
         return []
     today8 = today.strftime("%Y%m%d")
     links_titles = re.findall(
@@ -399,24 +416,37 @@ def fetch_cnnc_chromium(today):
 
 def fetch_cnnc_cnnpn(today):
     """中核集团 → 方案2: cnnpn.cn 聚合站（CF 绕过）"""
-    try:
-        html = fetch_html_static("https://www.cnnpn.cn/", timeout=8)
-    except Exception:
+    html = fetch_home_html("https://www.cnnpn.cn/")
+    if not html:
         return []
     anchors = re.findall(r'<a[^>]+href=["\']([^"\']*cnnpn\.cn[^"\']*article[^"\']*)["\'][^>]*>(.*?)</a>', html, re.S | re.I)
     seen = set()
-    results = []
+    candidates = []
     for l, raw_title in anchors:
         if l in seen:
             continue
         seen.add(l)
         u = l if l.startswith("http") else f"https://www.cnnpn.cn{l}" if l.startswith("/") else f"https://www.cnnpn.cn/{l}"
-        published_at = _date_from_url(u)
         t = clean_anchor_text(raw_title)
         if t and len(t) > 4:
-            results.append(_article(u, t, published_at))
-        if len(results) >= 8:
+            candidates.append((u, t))
+        if len(candidates) >= 8:
             break
+
+    if not candidates:
+        return []
+
+    today_str = today.strftime("%Y-%m-%d")
+    article_htmls = _fetch_many_sync([c[0] for c in candidates])
+    results = []
+    for (u, t), h in zip(candidates, article_htmls):
+        if not h:
+            continue
+        m = re.search(r'((?:20)\d{2})-(\d{2})-(\d{2})\s+\d{2}:\d{2}', h)
+        if m:
+            published_at = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+            if published_at == today_str:
+                results.append(_article(u, t, published_at))
     return results
 
 
@@ -482,16 +512,16 @@ async def verify_http(items, today):
         return [], date_failed, []
 
     connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit=30)
-    async with aiohttp.ClientSession(connector=connector) as session:
+    async with aiohttp.ClientSession(connector=connector, headers={"User-Agent": "Mozilla/5.0"}) as session:
         urls = [it["url"] for it in items]
-        statuses = await asyncio.gather(*[http_200_async(session, u) for u in urls])
+        results = await asyncio.gather(*[http_200_async(session, u) for u in urls])
 
     passed, failed = [], []
-    for item, ok in zip(items, statuses):
+    for item, (ok, reason) in zip(items, results):
         if ok:
             passed.append(item)
         else:
-            failed.append({"item": item, "reason": "HTTP非200"})
+            failed.append({"item": item, "reason": reason or "HTTP非200"})
 
     return passed, date_failed + failed, []
 
