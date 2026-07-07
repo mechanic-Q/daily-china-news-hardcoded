@@ -29,6 +29,8 @@ WEEKDAYS: list[str] = [
 ]
 
 
+import re
+
 def today_cst() -> date:
     return datetime.datetime.now(CST).date()
 
@@ -52,7 +54,7 @@ def parse_common_args() -> Tuple[date, bool]:
 
 def detect_source(url: str) -> str:
     if not url:
-        return '综合'
+        return ''
     if 'cankaoxiaoxi' in url or 'ckxxapp' in url:
         return '参考消息'
     if 'military.cctv' in url:
@@ -67,7 +69,16 @@ def detect_source(url: str) -> str:
         return '人民日报'
     if 'news.cn' in url or 'xinhuanet' in url:
         return '新华社'
-    return '综合'
+    return ''
+
+
+def clean_news_title(title: str) -> str:
+    if not title:
+        return title
+    t = title.strip()
+    t = re.sub(r'^【[^】]{2,20}(?:报|网|社|台|新闻|新闻网|科学院|客户端)】\s*', '', t)
+    t = re.sub(r'[-—＿_\|]{1,4}\s*(?:中国科学院|中国新闻网|中新网|新华网|央视网|人民网|中科院|光明网|光明日报|央视新闻|中国新闻|科学网)$', '', t)
+    return t.strip()
 
 
 def workdir(d: date) -> Path:

@@ -21,7 +21,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
 from urllib.request import Request, urlopen
 
-from daily.common import BASE_DIR, parse_common_args as parse_args
+from daily.common import BASE_DIR, parse_common_args as parse_args, clean_news_title
 from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom
 
 import httpx
@@ -223,7 +223,7 @@ def fetch_published_at(url):
 
 
 def _article(url, title, published_at=None):
-    return {"url": url, "title": title, "published_at": published_at}
+    return {"url": url, "title": clean_news_title(title), "published_at": published_at}
 
 
 def split_by_publish_date(items, today):
@@ -339,7 +339,7 @@ def fetch_cctv_news(today):
     results = []
     seen = set()
     for l, t_raw in links:
-        if "cctv.com" not in l or today_path not in l or ".shtml" not in l:
+        if "news.cctv.com" not in l or today_path not in l or ".shtml" not in l:
             continue
         u = l if l.startswith("http") else f"https:{l}" if l.startswith("//") else f"https://news.cctv.com{l}"
         if u in seen:
