@@ -238,7 +238,7 @@ def run(today, dry_run):
         if col_articles:
             for a in col_articles:
                 lines.append(f"### [{a['src']}] {a['title']}")
-                lines.append(a["summary"])
+                lines.append(f"【{a['src']}】{a['summary']}")
                 lines.append("")
         else:
             lines.append("（当日无真实报道，栏目留空）\n")

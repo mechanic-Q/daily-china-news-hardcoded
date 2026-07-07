@@ -18,7 +18,7 @@ from pathlib import Path
 
 from llm_client import call_llm, LLMCallError
 
-from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, detect_source
+from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, detect_source, clean_news_title
 
 WORLD_CLASS_THRESHOLD = 7
 WORLD_CLASS_CATEGORY = '🔬 世界性科研突破'
@@ -253,6 +253,7 @@ def parse_0(path, today):
         title = m.group(2).strip()
         url = m.group(3).strip()
         if m.group(4) == '✅' and date == today_str:
+            title = clean_news_title(title)
             articles.append({"date": date, "title": title, "url": url})
     return articles
 
@@ -524,6 +525,7 @@ def build_classification_result(today):
     if not articles:
         return {}, []
 
+    articles = [a for a in articles if detect_source(a["url"])]
     articles = [a for a in articles if is_quality_news(a["title"])]
 
     china_pass = []
@@ -666,6 +668,8 @@ def run(today, dry_run):
         lines.append(f"\n## {col}\n")
         for a in col_selected:
             src = detect_source(a['url'])
+            if not src:
+                continue
             lines.append(f"### [{src}] {a['title']}")
             lines.append(f"URL：{a['url']}")
             lines.append(f"发布时间：{a['date']}")
