@@ -14,9 +14,12 @@ import json
 import os
 import re
 import sys
+import unicodedata
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from llm_client import call_llm, LLMCallError
+from news_archive import normalize_url
 
 from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, detect_source, clean_news_title
 
@@ -181,6 +184,108 @@ def _chunks(items, size):
     """按固定大小切分 list。"""
     for i in range(0, len(items), size):
         yield items[i:i + size]
+
+
+def _normalized_event_title(title):
+    return re.sub(r'[^0-9a-z\u4e00-\u9fff]+', '', unicodedata.normalize('NFKC', title).lower())
+
+
+def _is_duplicate_candidate(a, b):
+    if a.get('date') != b.get('date'):
+        return False
+    left_url = normalize_url(a.get('url', ''))
+    right_url = normalize_url(b.get('url', ''))
+    if left_url and left_url == right_url:
+        return True
+    left = _normalized_event_title(a['title'])
+    right = _normalized_event_title(b['title'])
+    if left == right:
+        return True
+    left_pairs = {left[i:i + 2] for i in range(len(left) - 1)}
+    right_pairs = {right[i:i + 2] for i in range(len(right) - 1)}
+    overlap = len(left_pairs & right_pairs) / len(left_pairs | right_pairs) if left_pairs and right_pairs else 0
+    longest = SequenceMatcher(None, left, right).find_longest_match().size
+    return overlap >= 0.3 or longest >= 8
+
+
+def find_duplicate_candidate_groups(articles):
+    """返回疑似同事件的索引组；只发现候选，不在此处删除。"""
+    links = {i: set() for i in range(len(articles))}
+    for i in range(len(articles)):
+        for j in range(i + 1, len(articles)):
+            if _is_duplicate_candidate(articles[i], articles[j]):
+                links[i].add(j)
+                links[j].add(i)
+
+    groups = []
+    seen = set()
+    for start, neighbours in links.items():
+        if start in seen or not neighbours:
+            continue
+        stack = [start]
+        group = []
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            group.append(current)
+            stack.extend(links[current] - seen)
+        groups.append(sorted(group))
+    return groups
+
+
+def llm_review_duplicate_candidates(articles, candidate_groups):
+    """让 LLM 复核疑似组；只删除 LLM 明确判为同一事件的条目。"""
+    removed = set()
+    audit = []
+    for candidates in candidate_groups:
+        prompt = (
+            "判断以下疑似新闻是否报道同一具体事件。只有主体、对象、动作、核心数据和时间共同指向同一事实才可合并。"
+            "同类型不等于同一事件；主体不同（例如不同人物逝世、不同机构发布）必须保留为独立事件。"
+            "可拆成多个重复组；独立事件不要列入。只输出 JSON 对象，duplicate_groups 每项包含 indices、keep、reason。\n\n"
+            + "\n".join(f"[{local}] {articles[global_i]['title']}" for local, global_i in enumerate(candidates))
+            + '\n\nJSON格式：{"duplicate_groups":[{"indices":[0,1],"keep":0,"reason":"共同事实"}]}'
+        )
+        raw = call_llm(
+            "event-dedup",
+            messages=[
+                {"role": "system", "content": "你只能输出 JSON 对象，不要输出 markdown 或其他文字。"},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+            extra_body={"reasoning_effort": "none"},
+        )
+        try:
+            parsed = json.loads(_strip_llm_json(raw))
+        except (TypeError, json.JSONDecodeError) as e:
+            raise ValueError(f"event-dedup JSON 无效: {e}") from e
+        groups = parsed.get('duplicate_groups') if isinstance(parsed, dict) else None
+        if not isinstance(groups, list):
+            raise ValueError("event-dedup 返回缺少 duplicate_groups 列表")
+        used = set()
+        for group in groups:
+            indices = group.get('indices') if isinstance(group, dict) else None
+            keep = group.get('keep') if isinstance(group, dict) else None
+            reason = group.get('reason') if isinstance(group, dict) else None
+            if (not isinstance(indices, list) or len(indices) < 2
+                    or any(type(i) is not int or i not in range(len(candidates)) for i in indices)
+                    or type(keep) is not int or len(set(indices)) != len(indices) or keep not in indices
+                    or not isinstance(reason, str) or not reason.strip()
+                    or used.intersection(indices)):
+                raise ValueError(f"event-dedup schema 无效: {group!r}")
+            used.update(indices)
+            global_indices = [candidates[i] for i in indices]
+            global_keep = candidates[keep]
+            dropped = [i for i in global_indices if i != global_keep]
+            removed.update(dropped)
+            audit.append({
+                "indices": global_indices,
+                "keep": global_keep,
+                "removed": dropped,
+                "reason": reason.strip(),
+            })
+    return [article for i, article in enumerate(articles) if i not in removed], audit
 
 
 def llm_is_china_related_batch(articles):
@@ -537,6 +642,10 @@ def build_classification_result(today):
             china_llm.append(a)
     llm_confirmed = llm_is_china_related_batch(china_llm) if china_llm else []
     articles = china_pass + llm_confirmed
+
+    duplicate_candidates = find_duplicate_candidate_groups(articles)
+    if duplicate_candidates:
+        articles, _ = llm_review_duplicate_candidates(articles, duplicate_candidates)
 
     classified = {col: [] for col in COLUMN_ORDER}
     llm_fail_count = 0
