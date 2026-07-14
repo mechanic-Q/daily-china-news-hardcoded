@@ -8,6 +8,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import step4
 from daily.common import COLUMN_ORDER
 from step4 import (
     is_china_related, is_china_source,
@@ -129,6 +130,168 @@ class TestHighConfidenceCategory(unittest.TestCase):
         cat, scores = high_confidence_keyword_category("今日天气晴朗")
         self.assertIsNone(cat)
         self.assertIsNone(scores)
+
+
+class TestEventDedup(unittest.TestCase):
+
+    def test_same_normalized_url_is_duplicate_candidate(self):
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "量子芯片发布",
+                "url": "https://www.example.com/news/123?utm_source=feed",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "南极科考启航",
+                "url": "http://example.com/news/123",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [[0, 1]])
+
+    def test_candidate_threshold_includes_eight_char_common_event_fragment(self):
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "甲乙丙丁共同事件八个汉字戊己庚辛",
+                "url": "https://example.com/a",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "壹贰叁肆共同事件八个汉字伍陆柒玖",
+                "url": "https://example.com/b",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [[0, 1]])
+
+    def test_finds_perovskite_same_event_with_different_urls(self):
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "新型钙钛矿-有机叠层太阳能电池光电转换效率刷新世界纪录",
+                "url": "https://www.cas.cn/cm/202607/t20260714_5115479.shtml",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "超28%！钙钛矿-有机叠层太阳能电池效率破纪录",
+                "url": "https://www.cas.cn/cm/202607/t20260714_5115493.shtml",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "钙钛矿太阳能电池产业化基地在江苏投产",
+                "url": "https://example.com/independent-event",
+            },
+        ]
+
+        groups = step4.find_duplicate_candidate_groups(articles)
+
+        self.assertEqual(groups, [[0, 1]])
+
+    def test_llm_review_keeps_one_article_from_same_event(self):
+        articles = [
+            {"title": "新型钙钛矿-有机叠层太阳能电池光电转换效率刷新世界纪录", "url": "https://example.com/a"},
+            {"title": "超28%！钙钛矿-有机叠层太阳能电池效率破纪录", "url": "https://example.com/b"},
+        ]
+        raw = json.dumps({
+            "duplicate_groups": [{
+                "indices": [0, 1],
+                "keep": 0,
+                "reason": "同为28.04%稳态效率的同一项成果",
+            }]
+        }, ensure_ascii=False)
+
+        with mock.patch("step4.call_llm", return_value=raw):
+            kept, audit = step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+
+        self.assertEqual(kept, [articles[0]])
+        self.assertEqual(audit[0]["removed"], [1])
+
+    def test_llm_review_uses_local_indices_for_nonzero_candidate_group(self):
+        articles = [
+            {"title": f"独立新闻{i}", "url": f"https://example.com/{i}"}
+            for i in range(15)
+        ]
+        articles[11]["title"] = "两部门紧急预拨4.3亿元中央自然灾害救灾资金"
+        articles[14]["title"] = "两部门紧急预拨4.3亿元中央自然灾害救灾资金"
+        raw = json.dumps({
+            "duplicate_groups": [{"indices": [0, 1], "keep": 0, "reason": "同一事件"}]
+        }, ensure_ascii=False)
+
+        with mock.patch("step4.call_llm", return_value=raw) as call:
+            kept, audit = step4.llm_review_duplicate_candidates(articles, [[11, 14]])
+
+        prompt = call.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("[0] 两部门紧急预拨", prompt)
+        self.assertIn("[1] 两部门紧急预拨", prompt)
+        self.assertNotIn("[11]", prompt)
+        self.assertNotIn("[14]", prompt)
+        self.assertNotIn(articles[14], kept)
+        self.assertEqual(audit[0]["indices"], [11, 14])
+        self.assertEqual(audit[0]["keep"], 11)
+
+    def test_llm_review_rejects_boolean_keep_index(self):
+        articles = [
+            {"title": "同一事件甲", "url": "https://example.com/a"},
+            {"title": "同一事件乙", "url": "https://example.com/b"},
+        ]
+        raw = json.dumps({
+            "duplicate_groups": [{"indices": [0, 1], "keep": True, "reason": "同一事件"}]
+        })
+
+        with mock.patch("step4.call_llm", return_value=raw):
+            with self.assertRaisesRegex(ValueError, "schema 无效"):
+                step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+
+    def test_llm_review_invalid_json_stops_with_context(self):
+        articles = [
+            {"title": "同一成果报道甲", "url": "https://example.com/a"},
+            {"title": "同一成果报道乙", "url": "https://example.com/b"},
+        ]
+
+        with mock.patch("step4.call_llm", return_value="not json"):
+            with self.assertRaisesRegex(ValueError, "event-dedup"):
+                step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+
+    def test_classification_deduplicates_same_event_before_selection(self):
+        today = datetime.date(2026, 7, 14)
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "我国团队全球首次实现钙钛矿-有机叠层太阳能电池效率突破",
+                "url": "https://www.cas.cn/news/a.shtml",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "中国团队世界首次实现钙钛矿-有机叠层太阳能电池效率突破",
+                "url": "https://www.cas.cn/news/b.shtml",
+            },
+        ]
+        raw = json.dumps({
+            "duplicate_groups": [{"indices": [0, 1], "keep": 0, "reason": "同一项电池效率成果"}]
+        }, ensure_ascii=False)
+
+        with mock.patch("step4.parse_0", return_value=articles), \
+             mock.patch("step4.call_llm", return_value=raw) as call:
+            _, selected = step4.build_classification_result(today)
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["url"], articles[0]["url"])
+        self.assertEqual(call.call_args.args[0], "event-dedup")
+
+    def test_llm_prompt_says_same_type_is_not_same_event(self):
+        articles = [
+            {"title": "王大明同志逝世", "url": "https://example.com/a"},
+            {"title": "李彦同志逝世", "url": "https://example.com/b"},
+        ]
+
+        with mock.patch("step4.call_llm", return_value='{"duplicate_groups": []}') as call:
+            kept, _ = step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+
+        prompt = call.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("同类型不等于同一事件", prompt)
+        self.assertEqual(kept, articles)
 
 
 def make_signals(base=5):

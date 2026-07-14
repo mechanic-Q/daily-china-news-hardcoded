@@ -11,6 +11,10 @@ call_sites:
     max_tokens: 262144
     temperature: 0.0
     timeout: 120
+  event-dedup:
+    max_tokens: 4096
+    temperature: 0.0
+    timeout: 120
   summarize:
     max_tokens: 512
     temperature: 0.7

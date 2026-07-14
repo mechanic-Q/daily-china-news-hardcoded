@@ -126,6 +126,22 @@ RETRY_PROMPTS = {
 }
 
 
+class UnsafeBlockedTermError(ValueError):
+    pass
+
+
+def rewrite_blocked_terms(text):
+    """改写视频屏蔽词；未知语境交回上游，禁止硬删除。"""
+    if not any(term in text for term in ("习近平", "国家主席")):
+        return text
+    if "出席" in text and "开幕式" in text:
+        source = re.match(r"^(【[^】]+】)", text)
+        event = re.search(r"出席(.+?开幕式)", text)
+        if event:
+            return f"{source.group(1) if source else ''}{event.group(1)}将以最高规格举行，体现出对此次会议及其议题的高度重视。"
+    raise UnsafeBlockedTermError("无法安全改写屏蔽词，请重新生成摘要")
+
+
 def llm_summarize(title, body):
     """调用 LLM 逐条摘要（智能重试：诊断失败原因→针对性修复 prompt→重试）。
     失败返回 None，上游用 fallback_summarize 兜底。"""
@@ -169,7 +185,7 @@ def summarize_article_worker(index, article):
     if not summary:
         summary = fallback_summarize(article['title'], article['body'])
         fallback = True
-    summary = summary.replace("习近平", "")
+    summary = rewrite_blocked_terms(summary)
     return index, summary, fallback
 
 
@@ -197,13 +213,21 @@ def run(today, dry_run):
                 print(f"\n❌ 检测到正文提取失败的条目，pipeline 终止: [{a2['src']}] {a1['title'][:40]}")
                 raise SystemExit(1)
             matched.append({
-                "title": a1["title"],
+                "date": today_str,
+                "title": rewrite_blocked_terms(a1["title"]),
                 "category": a1["category"],
                 "src": a2["src"],
                 "body": body,
             })
         else:
             print(f"  ⚠ 未匹配到正文: {a1['title'][:40]}")
+
+    from step4 import find_duplicate_candidate_groups, llm_review_duplicate_candidates
+    duplicate_candidates = find_duplicate_candidate_groups(matched)
+    if duplicate_candidates:
+        matched, audit = llm_review_duplicate_candidates(matched, duplicate_candidates)
+        for item in audit:
+            print(f"  ♻ 去重闸门移除 {len(item['removed'])} 条: {item['reason']}")
 
     print(f"共 {len(matched)} 条，正在生成摘要...\n")
 
@@ -214,6 +238,8 @@ def run(today, dry_run):
             try:
                 idx, summary, fallback = future.result()
                 results[idx] = (summary, fallback)
+            except UnsafeBlockedTermError:
+                raise
             except Exception as e:
                 idx = futures[future]
                 a = matched[idx]
@@ -222,10 +248,19 @@ def run(today, dry_run):
 
     for idx, a in enumerate(matched):
         summary, fallback = results.get(idx, ("", True))
-        a["summary"] = summary or ""
+        a["summary"] = rewrite_blocked_terms(summary or "")
         a["fallback"] = fallback
         fb = "⚡" if fallback else "✅"
         print(f"  {fb} [{a['src']}] {a['title'][:40]}... ({len(a['summary'])}字)")
+
+    final_event_texts = [dict(a, title=f"{a['title']} {a['summary']}") for a in matched]
+    final_candidates = find_duplicate_candidate_groups(final_event_texts)
+    if final_candidates:
+        kept_texts, audit = llm_review_duplicate_candidates(final_event_texts, final_candidates)
+        kept_ids = {id(a) for a in kept_texts}
+        matched = [a for a, event in zip(matched, final_event_texts) if id(event) in kept_ids]
+        for item in audit:
+            print(f"  ♻ 最终摘要去重移除 {len(item['removed'])} 条: {item['reason']}")
 
     success = sum(1 for a in matched if not a["fallback"])
     print(f"\nAPI成功: {success}/{len(matched)}  规则回退: {len(matched) - success}")
