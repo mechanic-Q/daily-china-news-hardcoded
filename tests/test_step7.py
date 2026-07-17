@@ -41,18 +41,34 @@ class TestBlockedTermRewrite(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "无法安全改写屏蔽词"):
                 step7.summarize_article_worker(0, {"title": "t", "body": "b"})
 
-    def test_run_does_not_swallow_unknown_blocked_term_from_worker(self):
-        with mock.patch("step7.parse_1news", return_value={
-                 "key": {"title": "普通标题", "category": "🚀 科技"}
-             }), \
-             mock.patch("step7.parse_2news", return_value={
-                 "key": {"src": "人民日报", "body": "足够长的正文"}
-             }), \
-             mock.patch("step7.llm_summarize", return_value="习近平发表讲话"), \
-             mock.patch("step7.fallback_summarize", return_value="安全回退摘要"):
+    def test_run_skips_unknown_blocked_term_without_stopping_safe_articles(self):
+        news1 = {
+            "bad": {"title": "现代化道路研究", "category": "🤖 AI智能前沿"},
+            "safe": {"title": "科学模型升级", "category": "🤖 AI智能前沿"},
+        }
+        news2 = {
+            "bad": {"src": "人民日报", "body": "含屏蔽词的足够长正文"},
+            "safe": {"src": "新华社", "body": "安全稿件的足够长正文"},
+        }
+
+        def summarize(title, body):
+            return "习近平发表讲话" if title == "现代化道路研究" else "科学模型完成升级并服务科研。"
+
+        with mock.patch("step7.parse_1news", return_value=news1), \
+             mock.patch("step7.parse_2news", return_value=news2), \
+             mock.patch("step7.llm_summarize", side_effect=summarize), \
+             mock.patch("step4.find_duplicate_candidate_groups", return_value=[]):
+            import contextlib
             import datetime
-            with self.assertRaisesRegex(ValueError, "无法安全改写屏蔽词"):
+            import io
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
                 step7.run(datetime.date(2026, 7, 14), dry_run=True)
+
+        output = buf.getvalue()
+        self.assertNotIn("### [人民日报] 现代化道路研究", output)
+        self.assertNotIn("习近平", output)
+        self.assertIn("### [新华社] 科学模型升级", output)
 
     def test_run_sanitizes_fallback_after_generic_worker_error(self):
         with mock.patch("step7.parse_1news", return_value={
