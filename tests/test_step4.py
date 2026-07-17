@@ -425,7 +425,7 @@ class TestBatchE2E(unittest.TestCase):
         article = {
             "date": "2026-07-04",
             "title": "中美经贸摩擦最新动态",
-            "url": "https://example.com/news/123",
+            "url": "https://www.people.com.cn/n1/2026/0704/c1001-123.html",
         }
         raw = json.dumps([{"index": 0, **make_signals(9)}], ensure_ascii=False)
         with mock.patch('step4.parse_0', return_value=[article]), \
@@ -444,7 +444,7 @@ class TestBatchE2E(unittest.TestCase):
         article = {
             "date": "2026-07-04",
             "title": "中美经贸摩擦最新动态",
-            "url": "https://example.com/news/123",
+            "url": "https://www.people.com.cn/n1/2026/0704/c1001-123.html",
         }
         with mock.patch('step4.parse_0', return_value=[article]), \
              mock.patch('step4.score_signals_batch', return_value=[None]), \
@@ -480,7 +480,7 @@ class TestBatchE2E(unittest.TestCase):
     def test_run_writes_published_at_to_selected_links(self):
         today = datetime.date(2026, 7, 4)
         article = {
-            "url": "https://example.com/news/123",
+            "url": "https://www.people.com.cn/n1/2026/0704/c1001-123.html",
             "title": "中美经贸摩擦最新动态",
             "date": "2026-07-04",
             "column": "🚀 科技",
@@ -496,7 +496,7 @@ class TestBatchE2E(unittest.TestCase):
             (Path(tmp) / "2026-07-04").mkdir()
             run(today, dry_run=False)
             content = (Path(tmp) / "2026-07-04" / "1新闻_链接.md").read_text("utf-8")
-        self.assertIn("URL：https://example.com/news/123", content)
+        self.assertIn("URL：https://www.people.com.cn/n1/2026/0704/c1001-123.html", content)
         self.assertIn("发布时间：2026-07-04", content)
 
 

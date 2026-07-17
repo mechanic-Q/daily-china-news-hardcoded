@@ -42,10 +42,10 @@ class TestPublishDateParsing(unittest.TestCase):
     def test_fetch_cas_only_collects_target_date_urls(self):
         today = datetime.date(2026, 7, 4)
         homepage = '''
-        <a href="//www.cas.cn/../../syky/202607/t20260702_1.shtml">旧闻</a>
-        <a href="//www.cas.cn/../../syky/202607/t20260704_2.shtml">今日</a>
+        <a href="./syky/202607/t20260702_1.shtml">旧闻</a>
+        <a href="./syky/202607/t20260704_2.shtml">今日</a>
         '''
-        with mock.patch("step1_3.fetch_html_static", return_value=homepage), \
+        with mock.patch("step1_3.fetch_home_html", return_value=homepage), \
              mock.patch("step1_3._fetch_many_sync", return_value=["<title>今日科研突破----中国科学院</title>"]):
             items = fetch_cas(today)
         self.assertEqual(len(items), 1)
