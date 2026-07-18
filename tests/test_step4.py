@@ -231,7 +231,7 @@ class TestEventDedup(unittest.TestCase):
         self.assertEqual(audit[0]["indices"], [11, 14])
         self.assertEqual(audit[0]["keep"], 11)
 
-    def test_llm_review_rejects_boolean_keep_index(self):
+    def test_llm_review_skips_boolean_keep_index(self):
         articles = [
             {"title": "同一事件甲", "url": "https://example.com/a"},
             {"title": "同一事件乙", "url": "https://example.com/b"},
@@ -241,8 +241,29 @@ class TestEventDedup(unittest.TestCase):
         })
 
         with mock.patch("step4.call_llm", return_value=raw):
-            with self.assertRaisesRegex(ValueError, "schema 无效"):
-                step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+            kept, audit = step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+
+        self.assertEqual(kept, articles)
+        self.assertEqual(audit, [])
+
+    def test_llm_review_skips_singleton_group_and_processes_valid_group(self):
+        articles = [
+            {"title": "同一事件甲", "url": "https://example.com/a"},
+            {"title": "同一事件乙", "url": "https://example.com/b"},
+            {"title": "独立事件", "url": "https://example.com/c"},
+        ]
+        raw = json.dumps({
+            "duplicate_groups": [
+                {"indices": [2], "keep": 2, "reason": "错误的单元素组"},
+                {"indices": [0, 1], "keep": 0, "reason": "同一事件"},
+            ]
+        }, ensure_ascii=False)
+
+        with mock.patch("step4.call_llm", return_value=raw):
+            kept, audit = step4.llm_review_duplicate_candidates(articles, [[0, 1, 2]])
+
+        self.assertEqual(kept, [articles[0], articles[2]])
+        self.assertEqual(audit[0]["removed"], [1])
 
     def test_llm_review_invalid_json_stops_with_context(self):
         articles = [
