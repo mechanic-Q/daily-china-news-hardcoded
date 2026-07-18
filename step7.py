@@ -212,9 +212,14 @@ def run(today, dry_run):
             if body.startswith("[正文提取失败:"):
                 print(f"\n❌ 检测到正文提取失败的条目，pipeline 终止: [{a2['src']}] {a1['title'][:40]}")
                 raise SystemExit(1)
+            try:
+                title = rewrite_blocked_terms(a1["title"])
+            except UnsafeBlockedTermError as e:
+                print(f"  ⏭️ 跳过不安全标题 [{a2['src']}]: {e}")
+                continue
             matched.append({
                 "date": today_str,
-                "title": rewrite_blocked_terms(a1["title"]),
+                "title": title,
                 "category": a1["category"],
                 "src": a2["src"],
                 "body": body,
