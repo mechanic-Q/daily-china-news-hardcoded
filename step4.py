@@ -273,7 +273,8 @@ def llm_review_duplicate_candidates(articles, candidate_groups):
                     or type(keep) is not int or len(set(indices)) != len(indices) or keep not in indices
                     or not isinstance(reason, str) or not reason.strip()
                     or used.intersection(indices)):
-                raise ValueError(f"event-dedup schema 无效: {group!r}")
+                print(f"⚠ event-dedup schema 无效，跳过该组: {group!r}", file=sys.stderr)
+                continue
             used.update(indices)
             global_indices = [candidates[i] for i in indices]
             global_keep = candidates[keep]
