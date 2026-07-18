@@ -143,6 +143,16 @@ class TestSensitiveCommandLogging(unittest.TestCase):
 
 
 class TestFailureAlert(unittest.TestCase):
+    def test_successful_system_exit_does_not_send_alert(self):
+        module = load_module()
+        with mock.patch.object(module, "main", side_effect=SystemExit(0)), \
+             mock.patch.object(module, "load_env") as load_env:
+            with self.assertRaises(SystemExit) as caught:
+                module.main_with_alert()
+
+        self.assertEqual(caught.exception.code, 0)
+        load_env.assert_not_called()
+
     def test_alert_failure_does_not_mask_original_system_exit(self):
         module = load_module()
         with mock.patch.object(module, "main", side_effect=SystemExit("原始失败")), \
