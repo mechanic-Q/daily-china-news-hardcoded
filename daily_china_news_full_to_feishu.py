@@ -354,20 +354,27 @@ def main() -> None:
         log("skip-send enabled; delivery skipped")
 
 
+def alert_failure(error: BaseException) -> None:
+    try:
+        env = load_env()
+        token = feishu_token(env)
+        chat_id = feishu_chat_id(env)
+        date_s = today_or_arg(None)
+        send_text(token, chat_id, f"⚠ 每日新中国 {date_s} 自动化失败：{error}")
+        log("Feishu failure alert sent")
+    except (Exception, SystemExit) as alert_err:
+        log(f"Feishu alert also failed: {alert_err}")
+
+
 def main_with_alert() -> None:
     try:
         main()
-    except (Exception, SystemExit) as e:
-        # Try to send Feishu alert on failure; don't let alert failure mask original error
-        try:
-            env = load_env()
-            token = feishu_token(env)
-            chat_id = feishu_chat_id(env)
-            date_s = today_or_arg(None)
-            send_text(token, chat_id, f"⚠ 每日新中国 {date_s} 自动化失败：{e}")
-            log("Feishu failure alert sent")
-        except (Exception, SystemExit) as alert_err:
-            log(f"Feishu alert also failed: {alert_err}")
+    except SystemExit as error:
+        if error.code not in (None, 0):
+            alert_failure(error)
+        raise
+    except Exception as error:
+        alert_failure(error)
         raise
 
 
