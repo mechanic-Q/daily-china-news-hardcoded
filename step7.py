@@ -235,19 +235,21 @@ def run(today, dry_run):
         futures = {executor.submit(summarize_article_worker, idx, a): idx for idx, a in enumerate(matched)}
         results = {}
         for future in as_completed(futures):
+            idx = futures[future]
             try:
-                idx, summary, fallback = future.result()
+                _, summary, fallback = future.result()
                 results[idx] = (summary, fallback)
-            except UnsafeBlockedTermError:
-                raise
+            except UnsafeBlockedTermError as e:
+                a = matched[idx]
+                print(f"  ⏭️ 跳过不安全摘要 [{a['src']}] {a['title'][:40]}: {e}")
             except Exception as e:
-                idx = futures[future]
                 a = matched[idx]
                 print(f"  ⚠️ 工作线程异常 [{a['src']}] {a['title'][:40]}: {e}")
                 results[idx] = (fallback_summarize(a['title'], a['body']), True)
 
-    for idx, a in enumerate(matched):
-        summary, fallback = results.get(idx, ("", True))
+    safe_articles = [(matched[idx], results[idx]) for idx in sorted(results)]
+    matched = [article for article, _ in safe_articles]
+    for a, (summary, fallback) in safe_articles:
         a["summary"] = rewrite_blocked_terms(summary or "")
         a["fallback"] = fallback
         fb = "⚡" if fallback else "✅"
