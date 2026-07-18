@@ -111,8 +111,9 @@ flowchart LR
 git clone https://github.com/mechanic-Q/daily-china-news-hardcoded.git
 cd daily-china-news-hardcoded
 
-# Install dependencies
-pip install python-dotenv openai Pillow
+# Create the project virtual environment and install dependencies
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 
 # Configure API key
 cp .env.example .env
@@ -133,7 +134,7 @@ ZHIPU_API_KEY=your_key_here           # Required: GLM-4 Flash
 ### 一键运行 · One Command
 
 ```bash
-python3 run_all.sh     # 处理今日新闻 · process today
+./run_all.sh     # 处理今日新闻 · process today
 ```
 
 ### 分步运行 · Step by Step
