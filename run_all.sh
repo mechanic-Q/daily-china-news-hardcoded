@@ -32,6 +32,11 @@ if [[ -z "$DATE" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+if [[ ! -x "$PYTHON" ]]; then
+    echo "错误: 项目虚拟环境不存在；请运行: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
+    exit 1
+fi
 
 STEPS=("step1_3.py" "step4.py" "step6.py" "step7.py" "step8.py")
 
@@ -42,7 +47,7 @@ for step in "${STEPS[@]}"; do
     echo "═══ 运行: $step --date $DATE $DRY_RUN ═══"
     step_start=$(date +%s)
     set +e
-    python3 "$SCRIPT_DIR/$step" --date "$DATE" $DRY_RUN
+    "$PYTHON" "$SCRIPT_DIR/$step" --date "$DATE" $DRY_RUN
     exit_code=$?
     set -e
     step_end=$(date +%s)

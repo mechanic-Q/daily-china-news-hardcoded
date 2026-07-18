@@ -21,7 +21,7 @@ created_at: 2026-06-27 03:13:46
 
 ### 前提
 
-- Python 3.12+，安装依赖：pip install aiohttp openai Pillow python-dotenv
+- Python 3.12+，创建项目虚拟环境并安装依赖：`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 - Chromium（路径 /snap/bin/chromium，snap 安装）
 - 环境变量（从 .env 加载或 shell export）：
   - ZHIPU_API_KEY — GLM-4 Flash（分类 + 摘要）
