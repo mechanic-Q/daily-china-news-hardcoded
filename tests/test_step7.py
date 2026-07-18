@@ -70,6 +70,35 @@ class TestBlockedTermRewrite(unittest.TestCase):
         self.assertNotIn("习近平", output)
         self.assertIn("### [新华社] 科学模型升级", output)
 
+    def test_run_skips_unsafe_title_without_stopping_safe_articles(self):
+        news1 = {
+            "bad": {
+                "title": "坚持以习近平总书记关于国家粮食安全重要论述精神为指导",
+                "category": "🌾 农业",
+            },
+            "safe": {"title": "粮食安全保障能力提升", "category": "🌾 农业"},
+        }
+        news2 = {
+            "bad": {"src": "人民日报", "body": "不安全标题稿件的足够长正文"},
+            "safe": {"src": "新华社", "body": "安全稿件的足够长正文"},
+        }
+
+        with mock.patch("step7.parse_1news", return_value=news1), \
+             mock.patch("step7.parse_2news", return_value=news2), \
+             mock.patch("step7.llm_summarize", return_value="粮食安全保障能力持续提升。"), \
+             mock.patch("step4.find_duplicate_candidate_groups", return_value=[]):
+            import contextlib
+            import datetime
+            import io
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                step7.run(datetime.date(2026, 7, 18), dry_run=True)
+
+        output = buf.getvalue()
+        self.assertNotIn("习近平", output)
+        self.assertNotIn("### [人民日报]", output)
+        self.assertIn("### [新华社] 粮食安全保障能力提升", output)
+
     def test_run_sanitizes_fallback_after_generic_worker_error(self):
         with mock.patch("step7.parse_1news", return_value={
                  "key": {"title": "普通标题", "category": "🚀 科技"}
