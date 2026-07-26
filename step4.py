@@ -48,6 +48,63 @@ EXCLUDE_NEGATIVE = [
     '接受审查', '涉嫌严重',
 ]
 
+DIPLOMATIC_PROTOCOL = [
+    '会见', '访问', '出席', '接见', '晤', '磋商', '峰会', '联合声明', '公报',
+    '签署', '联合军演',
+]
+
+OUTLOOK_WORDS = [
+    '有较好基础', '稳中向好', '稳步推进', '总体平稳',
+    '扩量提质', '可靠替代', '形势好', '形势向好', '形势稳定', '基础牢',
+]
+
+OUTLOOK_ACTION_WORDS = ['印发', '实施', '启动', '部署']
+OUTLOOK_OBJECT_WORDS = ['工程', '规划', '计划', '项目', '方案']
+NON_RESEARCH_TITLES = [
+    '灾害', '溃坝', '规划', '权威发布',
+    '公报', '会见', '声明',
+]
+
+FRONTIER_DOMAIN_WORDS = [
+    '光刻机', 'EUV', '先进制程', '刻蚀机', 'EDA', 'AI芯片', '存储芯片',
+    '大飞机', '航空发动机', '涡扇', 'C919', 'C929',
+    '大模型', '算力', 'GPU', '训练集群', '光模块',
+    '核聚变', '人造太阳', '第四代核电', '高温气冷堆',
+    '量子计算机', '量子通信', '量子芯片',
+    '高铁', '数控机床', '工业软件', '工业机器人',
+    '空间站', '探月', '探火', '重型运载',
+    '商业航天', '新能源电池', '固态电池', '高端医疗',
+    '合成生物', '人工合成', '基因编辑', '脑机接口',
+]
+
+B2_SIGNAL_WORDS = [
+    '全产业链', '规模化量产', '国产化', '自主可控',
+    '打破封锁', '不再依赖', '国产替代', '国产算力',
+    '投产', '下线',
+]
+
+B2_MILESTONE_WORDS = [
+    '首次', '首例', '世界首', '全球首', '攻克',
+    '填补空白', '研制成功', '颠覆', '下线', '投产', '实现量产',
+    '全栈',
+]
+
+B2_ROUTINE_WORDS = ['例行发射', '常规迭代', '年度交付']
+
+A_BODY_BREAKTHROUGH_WORDS = [
+    '世界首次', '全球首次', '世界首例', '全球首例', '国际首例',
+]
+
+A_BODY_RESEARCH_WORDS = [
+    '发表', '期刊', '论文',
+    '克隆效率', '一系法', '研制成功', '填补空白',
+]
+
+QUANTITY_BREAKTHROUGH_RE = re.compile(
+    r'突破\s*[0-9一二三四五六七八九十百千万亿.]+\s*'
+    r'(?:吨|亩|台|架|颗|艘|个|项|人|公里|千米|千瓦|兆瓦|亿元|%)'
+)
+
 CHINA_KEYWORDS = [
     '习近平', '总书记',
     '中国', '我国', '国产', '中华', '中方', '在华', '访华', '驻华', '对华', '涉华',
@@ -374,15 +431,87 @@ def is_quality_news(title):
     return True
 
 
+def _is_conditional_excluded(
+    title,
+    trigger_words,
+    rescue_words=None,
+    rescue_categories=None,
+    rescue_word_groups=None,
+    min_rescue_score=2,
+):
+    """条件排除:命中 trigger_words 且不命中 rescue -> True.
+    - rescue_words: title中需匹配的挽救词(任一命中即不剔除)
+    - rescue_categories: title命中任一栏目关键词则不剔除
+    二者至少提供一个;都提供时任一满足即不剔除。
+    """
+    if not any(kw in title for kw in trigger_words):
+        return False
+    if rescue_words:
+        if any(kw in title for kw in rescue_words):
+            return False
+    if rescue_word_groups:
+        if all(any(kw in title for kw in group) for group in rescue_word_groups):
+            return False
+    if rescue_categories:
+        scores = score_all_categories(title)
+        if any(scores.get(cat, 0) >= min_rescue_score for cat in rescue_categories):
+            return False
+    return True
+
+
+def _is_non_research_title(title):
+    """True 表示标题不应通过世突 override。"""
+    return (
+        any(kw in title for kw in NON_RESEARCH_TITLES)
+        or ('调查评估' in title and any(kw in title for kw in ['灾害', '事故', '溃坝']))
+        or bool(QUANTITY_BREAKTHROUGH_RE.search(title))
+    )
+
+
+def _is_b2_breakthrough(title):
+    """B2 单国全链突破 = 前沿域 ∧ 信号 ∧ 里程碑 ∧ ¬例行"""
+    if not any(kw in title for kw in FRONTIER_DOMAIN_WORDS):
+        return False
+    if not any(kw in title for kw in B2_SIGNAL_WORDS):
+        return False
+    if not any(kw in title for kw in B2_MILESTONE_WORDS):
+        return False
+    if any(kw in title for kw in B2_ROUTINE_WORDS):
+        return False
+    if re.search(r'第[0-9一二三四五六七八九十百千万]+(?:架|批|次|颗|艘|台).*?(?:交付|发射|下线)', title):
+        return False
+    return True
+
+
+def _fetch_article_body(url, title):
+    """复用 step6 正文提取链；失败时不阻塞分类。"""
+    from step6 import fetch_and_extract
+    body, _ = fetch_and_extract(url, title)
+    return body
+
+
+def _is_a_body_breakthrough(body):
+    return (
+        any(kw in body for kw in A_BODY_BREAKTHROUGH_WORDS)
+        and any(kw in body for kw in A_BODY_RESEARCH_WORDS)
+    )
+
+
 CATEGORY_KEYWORDS = {
     '🔬 世界性科研突破': {
         '诺贝尔': 5, '世界首次': 5, '全球首次': 5, '首次发现': 5,
+        '世界首例': 6, '全球首例': 6,
         '基因': 4, '量子': 4, '干细胞': 4, 'iPS': 4, '重编程': 4,
         'p53': 4, '化学小分子': 4, '考古发现': 4, '考古': 3,
-        '航天': 3, '卫星': 3, '探测': 3, '嫦娥': 3, '天宫': 3,
-        '火星': 3, '月球': 3, '宇宙': 3, '火箭发射': 3,
-        '发现': 2, '突破': 2,
+        '嫦娥': 3, '天宫': 3, '火星': 3, '月球': 3, '宇宙': 3,
+        '一系法': 3, '克隆': 3, '首例': 4, '杂交水稻': 3,
+        '实体清单': 5, '瓦森纳': 5,
+        '卡脖子': 4, '断供': 4, '出口管制': 4, '禁运': 4, '国产替代': 4,
+        '封锁': 3, '自主可控': 3, '期刊': 2,
+        '发现': 2,
         '研究': 1, '实验': 1, '论文': 1,
+        '航天': 1, '卫星': 1, '探测': 1, '火箭发射': 1,
+        '水稻': 1, '育种': 1,
     },
     '🤖 AI智能前沿': {
         '人工智能': 5, '大模型': 5, 'AI': 5, 'ChatGPT': 5, 'GPT': 5,
@@ -400,10 +529,13 @@ CATEGORY_KEYWORDS = {
         '农机': 2, '种业': 2, '耕地': 2, '畜牧': 2,
         '治沙': 2, '农村': 1, '蔬菜': 1, '水果': 1,
         '种植': 1, '养殖': 1, '渔业': 1, '生态': 1,
+        '水稻': 3, '杂交稻': 3, '育种': 3, '稻': 1,
     },
     '🤝 扶贫': {
         '精准扶贫': 5, '易地搬迁': 4, '扶贫': 4, '脱贫': 4,
         '对口帮扶': 3, '消费扶贫': 3, '驻村书记': 3,
+        '乡村振兴': 6, '巩固脱贫': 6, '乡村产业': 3,
+        '农村人居': 2, '和美乡村': 2, '乡村建设': 2,
     },
     '⚡ 能源': {
         '核电': 4, '核能': 4, '人造太阳': 4,
@@ -422,11 +554,12 @@ CATEGORY_KEYWORDS = {
     '🚀 科技': {
         '龙芯': 4, '飞腾': 4, '鲲鹏': 4, '兆芯': 4,
         '芯片': 3, '5G': 3, '6G': 3, '算力': 3,
-        '机器人': 3, '无人机': 3, '科创': 2,
+        '机器人': 3, '无人机': 3, '科创板': 2,
         '数字': 2, '数据': 2, '智能': 2,
         '科技': 2, '创新': 1, '生产线': 1,
         '专利': 2, '中关村': 2,
         '经济': 1, '产业': 1, '发展': 1, '建设': 1, '项目': 1,
+        '卫星': 4, '航天': 3, '火箭': 3, '发射': 2,
     },
     '🧱 材料': {
         '新材料': 4, '稀土': 3, '钢铁': 3, '化工': 3,
@@ -553,13 +686,19 @@ def aggregate_scores(signals):
     return {col: relev[col] * factor for col in COLUMN_ORDER}
 
 
-def assign_category(signals):
+def assign_category(signals, title=None):
     relev = signals['relevance']
     world_raw = relev.get(WORLD_CLASS_CATEGORY, 0)
+    excluded_from_world = bool(title and _is_non_research_title(title))
     if world_raw >= WORLD_CLASS_THRESHOLD:
-        return WORLD_CLASS_CATEGORY
+        if not excluded_from_world:
+            return WORLD_CLASS_CATEGORY
     scores = aggregate_scores(signals)
-    best_col = max(scores, key=scores.get)
+    if excluded_from_world:
+        scores.pop(WORLD_CLASS_CATEGORY, None)
+    if not scores:
+        return None
+    best_col = max(scores, key=lambda col: scores[col])
     if scores[best_col] == 0:
         return None
     return best_col
@@ -584,7 +723,7 @@ def score_signals(title, source):
 
 def score_signals_batch(articles):
     """批量栏目评分；失败时返回 None 给调用方逐条 LLM 回退。"""
-    results = [None] * len(articles)
+    results: list[dict | None] = [None] * len(articles)
     col_list = ', '.join(COLUMN_ORDER)
     for batch_start in range(0, len(articles), LLM_BATCH_SIZE):
         batch = articles[batch_start:batch_start + LLM_BATCH_SIZE]
@@ -633,6 +772,13 @@ def build_classification_result(today):
 
     articles = [a for a in articles if detect_source(a["url"])]
     articles = [a for a in articles if is_quality_news(a["title"])]
+    articles = [a for a in articles if not _is_conditional_excluded(
+        a["title"], DIPLOMATIC_PROTOCOL, rescue_categories=COLUMN_ORDER
+    )]
+    articles = [a for a in articles if not _is_conditional_excluded(
+        a["title"], OUTLOOK_WORDS,
+        rescue_word_groups=(OUTLOOK_ACTION_WORDS, OUTLOOK_OBJECT_WORDS),
+    )]
 
     china_pass = []
     china_llm = []
@@ -653,14 +799,39 @@ def build_classification_result(today):
 
     llm_candidates = []
     for a in articles:
+        if _is_b2_breakthrough(a['title']):
+            a['signals'] = None
+            a['score_source'] = 'keyword-b2'
+            a['category'] = WORLD_CLASS_CATEGORY
+            kw_scores = score_all_categories(a['title'])
+            a['priority'] = priority_score(a['title'], WORLD_CLASS_CATEGORY) + kw_scores.get(WORLD_CLASS_CATEGORY, 0)
+            classified[WORLD_CLASS_CATEGORY].append(a)
+            continue
         cat_high, kw_scores_high = high_confidence_keyword_category(a['title'])
+        if cat_high == WORLD_CLASS_CATEGORY:
+            a['signals'] = None
+            a['score_source'] = 'keyword-high-confidence'
+            a['category'] = cat_high
+            a['priority'] = priority_score(a['title'], cat_high) + (kw_scores_high or {}).get(cat_high, 0)
+            classified[cat_high].append(a)
+            continue
         if cat_high is not None:
             a['signals'] = None
             a['score_source'] = 'keyword-high-confidence'
             a['category'] = cat_high
-            a['priority'] = priority_score(a['title'], cat_high) + kw_scores_high.get(cat_high, 0)
+            a['priority'] = priority_score(a['title'], cat_high) + (kw_scores_high or {}).get(cat_high, 0)
             classified[cat_high].append(a)
             continue
+        if any(kw in a['title'] for kw in ['研究', '科研', '进展', '实验', '试验', '育种', '水稻']):
+            body = _fetch_article_body(a['url'], a['title'])
+            if body and _is_a_body_breakthrough(body):
+                a['signals'] = None
+                a['score_source'] = 'body-signal'
+                a['category'] = WORLD_CLASS_CATEGORY
+                kw_scores = score_all_categories(a['title'])
+                a['priority'] = priority_score(a['title'], WORLD_CLASS_CATEGORY) + kw_scores.get(WORLD_CLASS_CATEGORY, 0)
+                classified[WORLD_CLASS_CATEGORY].append(a)
+                continue
         llm_candidates.append(a)
 
     if llm_candidates:
@@ -672,7 +843,7 @@ def build_classification_result(today):
                 a['signals'] = signals
                 a['score_source'] = 'llm-batch'
                 scores = aggregate_scores(signals)
-                cat = assign_category(signals)
+                cat = assign_category(signals, a['title'])
                 if cat is None:
                     continue
                 priority = scores.get(cat, 0)
@@ -682,7 +853,7 @@ def build_classification_result(today):
                     a['signals'] = signals_single
                     a['score_source'] = 'llm'
                     scores = aggregate_scores(signals_single)
-                    cat = assign_category(signals_single)
+                    cat = assign_category(signals_single, a['title'])
                     if cat is None:
                         continue
                     priority = scores.get(cat, 0)
@@ -704,7 +875,7 @@ def build_classification_result(today):
                             except Exception:
                                 cat = best_cat
                     except Exception:
-                        cat = max(kw_scores, key=kw_scores.get)
+                        cat = max(kw_scores, key=lambda col: kw_scores[col])
                     a['signals'] = None
                     a['score_source'] = 'keyword-fallback'
                     priority = priority_score(a['title'], cat) + kw_scores.get(cat, 0)
