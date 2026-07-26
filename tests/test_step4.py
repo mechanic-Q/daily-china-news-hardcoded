@@ -18,6 +18,11 @@ from step4 import (
     score_all_categories, high_confidence_keyword_category,
     llm_is_china_related_batch, score_signals, score_signals_batch,
     build_classification_result, run,
+    _is_conditional_excluded, DIPLOMATIC_PROTOCOL,
+    _is_non_research_title, NON_RESEARCH_TITLES,
+    assign_category, WORLD_CLASS_CATEGORY, WORLD_CLASS_THRESHOLD,
+    OUTLOOK_WORDS, OUTLOOK_RESCUE_WORDS,
+    _is_b2_breakthrough,
 )
 
 
@@ -130,6 +135,157 @@ class TestHighConfidenceCategory(unittest.TestCase):
         cat, scores = high_confidence_keyword_category("今日天气晴朗")
         self.assertIsNone(cat)
         self.assertIsNone(scores)
+
+
+class TestSectorKeywords(unittest.TestCase):
+    """行业词表补全验收:农业水稻育种 + 扶贫乡村振兴"""
+
+    def test_agriculture_rice_breeding(self):
+        scores = score_all_categories("我国水稻育种技术取得新进展")
+        self.assertIn("🌾 农业", scores)
+        self.assertGreater(scores["🌾 农业"], 0)
+
+    def test_agriculture_hybrid_rice(self):
+        scores = score_all_categories("杂交稻新品种通过审定")
+        self.assertIn("🌾 农业", scores)
+
+    def test_poverty_rural_revitalization(self):
+        scores = score_all_categories("乡村振兴示范村建设取得阶段性成果")
+        self.assertIn("🤝 扶贫", scores)
+
+    def test_poverty_consolidate(self):
+        scores = score_all_categories("巩固脱贫成果与乡村振兴有效衔接")
+        self.assertIn("🤝 扶贫", scores)
+
+
+class TestConditionalExclusion(unittest.TestCase):
+    """B3 纯政治剔除 + 条件排除 helper"""
+
+    def test_diplomatic_protocol_no_sector_excluded(self):
+        """纯外交礼宾词,无行业关键词 -> 剔除"""
+        result = _is_conditional_excluded(
+            "泰国总理阿努廷会见董军",
+            DIPLOMATIC_PROTOCOL,
+            rescue_categories=COLUMN_ORDER,
+        )
+        self.assertTrue(result)
+
+    def test_diplomatic_with_sector_keyword_rescued(self):
+        """外交事件+行业关键词 -> 不剔除(如能源协议)"""
+        result = _is_conditional_excluded(
+            "中俄签署能源合作协议",
+            DIPLOMATIC_PROTOCOL,
+            rescue_categories=COLUMN_ORDER,
+        )
+        self.assertFalse(result)
+
+    def test_diplomatic_joint_exercise_rescued(self):
+        """联合军演(军事关键词) -> 不剔除"""
+        result = _is_conditional_excluded(
+            "中俄联合军演",
+            DIPLOMATIC_PROTOCOL,
+            rescue_categories=COLUMN_ORDER,
+        )
+        self.assertFalse(result)
+
+    def test_diplomatic_g20_excluded(self):
+        """纯政治峰会发言 -> 剔除"""
+        result = _is_conditional_excluded(
+            "习近平出席G20峰会发言",
+            DIPLOMATIC_PROTOCOL,
+            rescue_categories=COLUMN_ORDER,
+        )
+        self.assertTrue(result)
+
+
+class TestNonResearchGuard(unittest.TestCase):
+    """T4 世突非科研负向闸"""
+
+    def _make_world_signals(self, world_relevance=8, base=5):
+        return {
+            "relevance": {col: base for col in COLUMN_ORDER}
+            | {WORLD_CLASS_CATEGORY: world_relevance},
+            "importance": base,
+            "timeliness": base,
+        }
+
+    def test_assign_category_blocks_non_research(self):
+        """溃坝标题即使 LLM 给世突高分也不入世突"""
+        signals = self._make_world_signals(8)
+        cat = assign_category(signals, "国务院成立广西六蓝水库溃坝灾害调查评估组")
+        self.assertIsNotNone(cat)
+        self.assertNotEqual(cat, WORLD_CLASS_CATEGORY)
+
+    def test_assign_category_allows_research(self):
+        """真科研标题正常入世突"""
+        signals = self._make_world_signals(8)
+        cat = assign_category(signals, "量子计算研究取得重大突破")
+        self.assertEqual(cat, WORLD_CLASS_CATEGORY)
+
+    def test_non_research_guard_hits_non_research_title(self):
+        self.assertTrue(_is_non_research_title("溃坝灾害调查评估"))
+        self.assertTrue(_is_non_research_title("权威发布"))
+        self.assertFalse(_is_non_research_title("量子计算重大突破"))
+
+
+class TestArchetypeKeywords(unittest.TestCase):
+    """T5 世突 A+B1 原型词表 + 剪过广词"""
+
+    def test_agriculture_a_prototype(self):
+        """杂交水稻世界首例 -> 世突(A原型,高分关键词路径)"""
+        scores = score_all_categories("我国杂交水稻一系1号是世界首例")
+        self.assertIn(WORLD_CLASS_CATEGORY, scores)
+        self.assertGreater(scores[WORLD_CLASS_CATEGORY], 6)
+
+    def test_agriculture_routine_stays_agriculture(self):
+        """常规水稻育种无突破信号 -> 农业(不被世突抢)"""
+        scores = score_all_categories("水稻育种常规推广")
+        self.assertIn("🌾 农业", scores)
+        if WORLD_CLASS_CATEGORY in scores:
+            self.assertLess(scores[WORLD_CLASS_CATEGORY], scores["🌾 农业"])
+
+    def test_routine_satellite_goes_to_tech_not_world(self):
+        """例行卫星发射 -> 科技(世突中卫星已降权)"""
+        scores = score_all_categories("我国成功发射天仪48星等5颗卫星")
+        self.assertIn("🚀 科技", scores)
+        if WORLD_CLASS_CATEGORY in scores:
+            self.assertLess(scores[WORLD_CLASS_CATEGORY], scores["🚀 科技"])
+
+
+class TestOutlookExclusion(unittest.TestCase):
+    """T3 展望/口号剔除"""
+
+    def test_outlook_no_rescue_excluded(self):
+        """展望口号词无具体行动 -> 剔除"""
+        result = _is_conditional_excluded(
+            "夺取全年粮食丰收有较好基础",
+            OUTLOOK_WORDS, rescue_words=OUTLOOK_RESCUE_WORDS,
+        )
+        self.assertTrue(result)
+
+    def test_outlook_slogan_excluded(self):
+        """纯口号无具体行动 -> 剔除"""
+        result = _is_conditional_excluded(
+            "进一步实现扩量提质可靠替代",
+            OUTLOOK_WORDS, rescue_words=OUTLOOK_RESCUE_WORDS,
+        )
+        self.assertTrue(result)
+
+    def test_outlook_with_action_rescued(self):
+        """展望词+具体行动词 -> 不剔除(如部署工程)"""
+        result = _is_conditional_excluded(
+            "印发可再生能源发展十五五规划部署X工程",
+            OUTLOOK_WORDS, rescue_words=OUTLOOK_RESCUE_WORDS,
+        )
+        self.assertFalse(result)
+
+    def test_no_outlook_not_excluded(self):
+        """无展望词 -> 不剔除"""
+        result = _is_conditional_excluded(
+            "我国成功发射天仪48星",
+            OUTLOOK_WORDS, rescue_words=OUTLOOK_RESCUE_WORDS,
+        )
+        self.assertFalse(result)
 
 
 class TestEventDedup(unittest.TestCase):
@@ -289,17 +445,18 @@ class TestEventDedup(unittest.TestCase):
                 "url": "https://www.cas.cn/news/b.shtml",
             },
         ]
-        raw = json.dumps({
+        dedup_raw = json.dumps({
             "duplicate_groups": [{"indices": [0, 1], "keep": 0, "reason": "同一项电池效率成果"}]
         }, ensure_ascii=False)
+        # After dedup: 2 articles → 1. Then LLM needs signals for that remaining article.
+        score_fallback = make_signals(8)
 
         with mock.patch("step4.parse_0", return_value=articles), \
-             mock.patch("step4.call_llm", return_value=raw) as call:
+             mock.patch("step4.call_llm", side_effect=[dedup_raw, json.dumps([{"index": 0, **score_fallback}], ensure_ascii=False)]):
             _, selected = step4.build_classification_result(today)
 
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0]["url"], articles[0]["url"])
-        self.assertEqual(call.call_args.args[0], "event-dedup")
 
     def test_llm_prompt_says_same_type_is_not_same_event(self):
         articles = [
@@ -377,6 +534,28 @@ class TestParseScoreJsonArray(unittest.TestCase):
         raw = json.dumps([{"index": 2, **make_signals()}], ensure_ascii=False)
         with self.assertRaises(ValueError):
             _parse_score_json_array(raw, 1)
+
+
+class TestB2Breakthrough(unittest.TestCase):
+    """T6 世突 B2 白名单+信号+新突破闸"""
+
+    def test_deepseek_b2(self):
+        """DeepSeek全栈自主 -> B2世突"""
+        self.assertTrue(_is_b2_breakthrough(
+            "DeepSeek大模型国产算力光模块全栈自主可控"
+        ))
+
+    def test_c919_production_b2(self):
+        """C919投产 -> B2世突"""
+        self.assertTrue(_is_b2_breakthrough("C919大飞机首次投产"))
+
+    def test_phone_mass_production_not_b2(self):
+        """国产手机量产 -> 非B2(手机非前沿域)"""
+        self.assertFalse(_is_b2_breakthrough("国产手机规模化量产交付"))
+
+    def test_tons_breakthrough_not_b2(self):
+        """突破1亿吨(数量) -> 非B2(无前沿域)"""
+        self.assertFalse(_is_b2_breakthrough("杂交水稻种植面积突破1亿亩"))
 
 
 class TestBatchE2E(unittest.TestCase):
@@ -497,6 +676,23 @@ class TestBatchE2E(unittest.TestCase):
         self.assertIn('priority', record)
         self.assertTrue(record['selected_in_top10'])
         self.assertEqual(record['score_source'], 'llm-batch')
+
+    def test_e2e_b2_deepseek_routes_to_world(self):
+        """DeepSeek B2 突破 -> 世突(不被AI栏抢)"""
+        today = datetime.date(2026, 7, 25)
+        article = {
+            "date": "2026-07-25",
+            "title": "DeepSeek大模型国产算力光模块全栈自主可控",
+            "url": "https://www.people.com.cn/n1/2026/0725/c1001-123.html",
+        }
+        with mock.patch('step4.parse_0', return_value=[article]), \
+             mock.patch('step4.call_llm') as mocked_llm:
+            classified, selected = build_classification_result(today)
+        all_items = [a for items in classified.values() for a in items]
+        self.assertEqual(len(all_items), 1)
+        result = all_items[0]
+        self.assertEqual(result.get('category'), WORLD_CLASS_CATEGORY)
+        self.assertEqual(result.get('score_source'), 'keyword-b2')
 
     def test_run_writes_published_at_to_selected_links(self):
         today = datetime.date(2026, 7, 4)
