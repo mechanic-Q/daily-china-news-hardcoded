@@ -50,19 +50,18 @@ EXCLUDE_NEGATIVE = [
 
 DIPLOMATIC_PROTOCOL = [
     '会见', '访问', '出席', '接见', '晤', '磋商', '峰会', '联合声明', '公报',
+    '签署', '联合军演',
 ]
 
 OUTLOOK_WORDS = [
-    '有较好基础', '稳中向好', '稳步推进', '总体平稳', '稳定',
-    '扩量提质', '可靠替代', '形势',
+    '有较好基础', '稳中向好', '稳步推进', '总体平稳',
+    '扩量提质', '可靠替代', '形势好', '形势向好', '形势稳定', '基础牢',
 ]
 
-OUTLOOK_RESCUE_WORDS = [
-    '印发', '实施', '启动', '部署', '工程', '规划', '计划', '项目', '方案',
-]
-
+OUTLOOK_ACTION_WORDS = ['印发', '实施', '启动', '部署']
+OUTLOOK_OBJECT_WORDS = ['工程', '规划', '计划', '项目', '方案']
 NON_RESEARCH_TITLES = [
-    '灾害', '调查评估', '溃坝', '规划', '权威发布',
+    '灾害', '溃坝', '规划', '权威发布',
     '公报', '会见', '声明',
 ]
 
@@ -78,25 +77,33 @@ FRONTIER_DOMAIN_WORDS = [
     '合成生物', '人工合成', '基因编辑', '脑机接口',
 ]
 
-B2_ACHIEVEMENT_WORDS = [
+B2_SIGNAL_WORDS = [
     '全产业链', '规模化量产', '国产化', '自主可控',
-    '打破封锁', '不再依赖', '国产替代',
+    '打破封锁', '不再依赖', '国产替代', '国产算力',
+    '投产', '下线',
+]
+
+B2_MILESTONE_WORDS = [
     '首次', '首例', '世界首', '全球首', '攻克',
     '填补空白', '研制成功', '颠覆', '下线', '投产', '实现量产',
     '全栈',
 ]
 
-B2_ROUTINE_WORDS = [
-    '交付', '年度',
+B2_ROUTINE_WORDS = ['例行发射', '常规迭代', '年度交付']
+
+A_BODY_BREAKTHROUGH_WORDS = [
+    '世界首次', '全球首次', '世界首例', '全球首例', '国际首例',
 ]
 
-A_BODY_SIGNALS = [
-    '世界首次', '全球首次', '世界首例', '全球首例',
-    '首例', '发表', '期刊', '论文',
+A_BODY_RESEARCH_WORDS = [
+    '发表', '期刊', '论文',
     '克隆效率', '一系法', '研制成功', '填补空白',
 ]
 
-BODY_FETCH_TIMEOUT = 15
+QUANTITY_BREAKTHROUGH_RE = re.compile(
+    r'突破\s*[0-9一二三四五六七八九十百千万亿.]+\s*'
+    r'(?:吨|亩|台|架|颗|艘|个|项|人|公里|千米|千瓦|兆瓦|亿元|%)'
+)
 
 CHINA_KEYWORDS = [
     '习近平', '总书记',
@@ -424,7 +431,14 @@ def is_quality_news(title):
     return True
 
 
-def _is_conditional_excluded(title, trigger_words, rescue_words=None, rescue_categories=None):
+def _is_conditional_excluded(
+    title,
+    trigger_words,
+    rescue_words=None,
+    rescue_categories=None,
+    rescue_word_groups=None,
+    min_rescue_score=2,
+):
     """条件排除:命中 trigger_words 且不命中 rescue -> True.
     - rescue_words: title中需匹配的挽救词(任一命中即不剔除)
     - rescue_categories: title命中任一栏目关键词则不剔除
@@ -435,54 +449,58 @@ def _is_conditional_excluded(title, trigger_words, rescue_words=None, rescue_cat
     if rescue_words:
         if any(kw in title for kw in rescue_words):
             return False
+    if rescue_word_groups:
+        if all(any(kw in title for kw in group) for group in rescue_word_groups):
+            return False
     if rescue_categories:
         scores = score_all_categories(title)
-        if any(scores.get(cat, 0) > 0 for cat in rescue_categories):
+        if any(scores.get(cat, 0) >= min_rescue_score for cat in rescue_categories):
             return False
     return True
 
 
 def _is_non_research_title(title):
-    """True 表示标题命中非科研模式,不应通过世突 override"""
-    return any(kw in title for kw in NON_RESEARCH_TITLES)
+    """True 表示标题不应通过世突 override。"""
+    return (
+        any(kw in title for kw in NON_RESEARCH_TITLES)
+        or ('调查评估' in title and any(kw in title for kw in ['灾害', '事故', '溃坝']))
+        or bool(QUANTITY_BREAKTHROUGH_RE.search(title))
+    )
 
 
 def _is_b2_breakthrough(title):
-    """B2 单国全链突破 = 前沿域 ∧ 成就词(信号∪里程碑) ∧ ¬例行"""
+    """B2 单国全链突破 = 前沿域 ∧ 信号 ∧ 里程碑 ∧ ¬例行"""
     if not any(kw in title for kw in FRONTIER_DOMAIN_WORDS):
         return False
-    if not any(kw in title for kw in B2_ACHIEVEMENT_WORDS):
+    if not any(kw in title for kw in B2_SIGNAL_WORDS):
+        return False
+    if not any(kw in title for kw in B2_MILESTONE_WORDS):
         return False
     if any(kw in title for kw in B2_ROUTINE_WORDS):
+        return False
+    if re.search(r'第[0-9一二三四五六七八九十百千万]+(?:架|批|次|颗|艘|台).*?(?:交付|发射|下线)', title):
         return False
     return True
 
 
-def _fetch_page_text(url):
-    """获取网页纯文本(HTML tag stripped),用于正文信号检测。
-    失败时返回 None(静默,不阻塞 pipeline)。"""
-    import urllib.request
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={'User-Agent': 'Mozilla/5.0 (Linux; Android 10)',
-                     'Accept': 'text/html, */*',
-                     'Accept-Language': 'zh-CN,zh;q=0.9'},
-        )
-        with urllib.request.urlopen(req, timeout=BODY_FETCH_TIMEOUT) as resp:
-            html = resp.read().decode('utf-8', errors='replace')
-        import re
-        text = re.sub(r'<[^>]+>', ' ', html)
-        text = re.sub(r'&[a-z]+;', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text[:5000]
-    except Exception:
-        return None
+def _fetch_article_body(url, title):
+    """复用 step6 正文提取链；失败时不阻塞分类。"""
+    from step6 import fetch_and_extract
+    body, _ = fetch_and_extract(url, title)
+    return body
+
+
+def _is_a_body_breakthrough(body):
+    return (
+        any(kw in body for kw in A_BODY_BREAKTHROUGH_WORDS)
+        and any(kw in body for kw in A_BODY_RESEARCH_WORDS)
+    )
 
 
 CATEGORY_KEYWORDS = {
     '🔬 世界性科研突破': {
         '诺贝尔': 5, '世界首次': 5, '全球首次': 5, '首次发现': 5,
+        '世界首例': 6, '全球首例': 6,
         '基因': 4, '量子': 4, '干细胞': 4, 'iPS': 4, '重编程': 4,
         'p53': 4, '化学小分子': 4, '考古发现': 4, '考古': 3,
         '嫦娥': 3, '天宫': 3, '火星': 3, '月球': 3, '宇宙': 3,
@@ -511,12 +529,12 @@ CATEGORY_KEYWORDS = {
         '农机': 2, '种业': 2, '耕地': 2, '畜牧': 2,
         '治沙': 2, '农村': 1, '蔬菜': 1, '水果': 1,
         '种植': 1, '养殖': 1, '渔业': 1, '生态': 1,
-        '水稻': 2, '杂交稻': 2, '育种': 2, '稻': 1,
+        '水稻': 3, '杂交稻': 3, '育种': 3, '稻': 1,
     },
     '🤝 扶贫': {
         '精准扶贫': 5, '易地搬迁': 4, '扶贫': 4, '脱贫': 4,
         '对口帮扶': 3, '消费扶贫': 3, '驻村书记': 3,
-        '乡村振兴': 3, '巩固脱贫': 3, '乡村产业': 2,
+        '乡村振兴': 6, '巩固脱贫': 6, '乡村产业': 3,
         '农村人居': 2, '和美乡村': 2, '乡村建设': 2,
     },
     '⚡ 能源': {
@@ -541,7 +559,7 @@ CATEGORY_KEYWORDS = {
         '科技': 2, '创新': 1, '生产线': 1,
         '专利': 2, '中关村': 2,
         '经济': 1, '产业': 1, '发展': 1, '建设': 1, '项目': 1,
-        '卫星': 2, '航天': 2, '火箭': 2, '发射': 1,
+        '卫星': 4, '航天': 3, '火箭': 3, '发射': 2,
     },
     '🧱 材料': {
         '新材料': 4, '稀土': 3, '钢铁': 3, '化工': 3,
@@ -671,15 +689,16 @@ def aggregate_scores(signals):
 def assign_category(signals, title=None):
     relev = signals['relevance']
     world_raw = relev.get(WORLD_CLASS_CATEGORY, 0)
+    excluded_from_world = bool(title and _is_non_research_title(title))
     if world_raw >= WORLD_CLASS_THRESHOLD:
-        if title is None or not _is_non_research_title(title):
+        if not excluded_from_world:
             return WORLD_CLASS_CATEGORY
     scores = aggregate_scores(signals)
-    if title and _is_non_research_title(title):
+    if excluded_from_world:
         scores.pop(WORLD_CLASS_CATEGORY, None)
     if not scores:
         return None
-    best_col = max(scores, key=scores.get)
+    best_col = max(scores, key=lambda col: scores[col])
     if scores[best_col] == 0:
         return None
     return best_col
@@ -704,7 +723,7 @@ def score_signals(title, source):
 
 def score_signals_batch(articles):
     """批量栏目评分；失败时返回 None 给调用方逐条 LLM 回退。"""
-    results = [None] * len(articles)
+    results: list[dict | None] = [None] * len(articles)
     col_list = ', '.join(COLUMN_ORDER)
     for batch_start in range(0, len(articles), LLM_BATCH_SIZE):
         batch = articles[batch_start:batch_start + LLM_BATCH_SIZE]
@@ -757,7 +776,8 @@ def build_classification_result(today):
         a["title"], DIPLOMATIC_PROTOCOL, rescue_categories=COLUMN_ORDER
     )]
     articles = [a for a in articles if not _is_conditional_excluded(
-        a["title"], OUTLOOK_WORDS, rescue_words=OUTLOOK_RESCUE_WORDS
+        a["title"], OUTLOOK_WORDS,
+        rescue_word_groups=(OUTLOOK_ACTION_WORDS, OUTLOOK_OBJECT_WORDS),
     )]
 
     china_pass = []
@@ -788,21 +808,23 @@ def build_classification_result(today):
             classified[WORLD_CLASS_CATEGORY].append(a)
             continue
         cat_high, kw_scores_high = high_confidence_keyword_category(a['title'])
+        if cat_high == WORLD_CLASS_CATEGORY:
+            a['signals'] = None
+            a['score_source'] = 'keyword-high-confidence'
+            a['category'] = cat_high
+            a['priority'] = priority_score(a['title'], cat_high) + (kw_scores_high or {}).get(cat_high, 0)
+            classified[cat_high].append(a)
+            continue
         if cat_high is not None:
             a['signals'] = None
             a['score_source'] = 'keyword-high-confidence'
             a['category'] = cat_high
-            a['priority'] = priority_score(a['title'], cat_high) + kw_scores_high.get(cat_high, 0)
+            a['priority'] = priority_score(a['title'], cat_high) + (kw_scores_high or {}).get(cat_high, 0)
             classified[cat_high].append(a)
             continue
-        llm_candidates.append(a)
-
-    # G1: 正文信号 for A 原型 — 标题弱但正文有世界首例/期刊等
-    remaining = []
-    for a in llm_candidates:
         if any(kw in a['title'] for kw in ['研究', '科研', '进展', '实验', '试验', '育种', '水稻']):
-            body = _fetch_page_text(a['url'])
-            if body and any(kw in body for kw in A_BODY_SIGNALS):
+            body = _fetch_article_body(a['url'], a['title'])
+            if body and _is_a_body_breakthrough(body):
                 a['signals'] = None
                 a['score_source'] = 'body-signal'
                 a['category'] = WORLD_CLASS_CATEGORY
@@ -810,8 +832,7 @@ def build_classification_result(today):
                 a['priority'] = priority_score(a['title'], WORLD_CLASS_CATEGORY) + kw_scores.get(WORLD_CLASS_CATEGORY, 0)
                 classified[WORLD_CLASS_CATEGORY].append(a)
                 continue
-        remaining.append(a)
-    llm_candidates = remaining
+        llm_candidates.append(a)
 
     if llm_candidates:
         batch_signals = score_signals_batch(llm_candidates)
@@ -854,7 +875,7 @@ def build_classification_result(today):
                             except Exception:
                                 cat = best_cat
                     except Exception:
-                        cat = max(kw_scores, key=kw_scores.get)
+                        cat = max(kw_scores, key=lambda col: kw_scores[col])
                     a['signals'] = None
                     a['score_source'] = 'keyword-fallback'
                     priority = priority_score(a['title'], cat) + kw_scores.get(cat, 0)
