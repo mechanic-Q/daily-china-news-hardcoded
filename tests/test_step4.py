@@ -23,6 +23,7 @@ from step4 import (
     assign_category, WORLD_CLASS_CATEGORY, WORLD_CLASS_THRESHOLD,
     OUTLOOK_WORDS, OUTLOOK_RESCUE_WORDS,
     _is_b2_breakthrough,
+    _fetch_page_text, A_BODY_SIGNALS,
 )
 
 
@@ -556,6 +557,41 @@ class TestB2Breakthrough(unittest.TestCase):
     def test_tons_breakthrough_not_b2(self):
         """突破1亿吨(数量) -> 非B2(无前沿域)"""
         self.assertFalse(_is_b2_breakthrough("杂交水稻种植面积突破1亿亩"))
+
+
+class TestBodySignalG1(unittest.TestCase):
+    """T8 正文信号 G1"""
+
+    def test_weak_title_strong_body_routes_to_world(self):
+        """标题仅有弱科研词(科研/进展),正文有A原型信号 -> 世突(body-signal)"""
+        today = datetime.date(2026, 7, 25)
+        article = {
+            "date": "2026-07-25",
+            "title": "我国科研人员取得重要进展",
+            "url": "https://www.people.com.cn/n1/2026/0725/c1001-123.html",
+        }
+        body_with_signal = "中国水稻研究所王克剑团队成功研发一系法杂交水稻'一系1号'，克隆效率超99%，论文发表于《生命》期刊，属世界首例。"
+        with mock.patch("step4.parse_0", return_value=[article]), \
+             mock.patch("step4._fetch_page_text", return_value=body_with_signal):
+            classified, selected = step4.build_classification_result(today)
+        result = [a for items in classified.values() for a in items]
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["category"], WORLD_CLASS_CATEGORY)
+        self.assertEqual(result[0]["score_source"], "body-signal")
+
+    def test_no_research_keyword_does_not_trigger_fetch(self):
+        """标题无研究/科研等词 -> 不触发正文抓取"""
+        today = datetime.date(2026, 7, 25)
+        article = {
+            "date": "2026-07-25",
+            "title": "今日天气晴朗",
+            "url": "https://www.people.com.cn/n1/2026/0725/c1001-456.html",
+        }
+        with mock.patch("step4.parse_0", return_value=[article]), \
+             mock.patch("step4.call_llm") as mocked_llm, \
+             mock.patch("step4._fetch_page_text") as mocked_fetch:
+            _, _ = step4.build_classification_result(today)
+        mocked_fetch.assert_not_called()
 
 
 class TestBatchE2E(unittest.TestCase):

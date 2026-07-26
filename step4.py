@@ -90,6 +90,14 @@ B2_ROUTINE_WORDS = [
     '交付', '年度',
 ]
 
+A_BODY_SIGNALS = [
+    '世界首次', '全球首次', '世界首例', '全球首例',
+    '首例', '发表', '期刊', '论文',
+    '克隆效率', '一系法', '研制成功', '填补空白',
+]
+
+BODY_FETCH_TIMEOUT = 15
+
 CHINA_KEYWORDS = [
     '习近平', '总书记',
     '中国', '我国', '国产', '中华', '中方', '在华', '访华', '驻华', '对华', '涉华',
@@ -450,6 +458,28 @@ def _is_b2_breakthrough(title):
     return True
 
 
+def _fetch_page_text(url):
+    """获取网页纯文本(HTML tag stripped),用于正文信号检测。
+    失败时返回 None(静默,不阻塞 pipeline)。"""
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'Mozilla/5.0 (Linux; Android 10)',
+                     'Accept': 'text/html, */*',
+                     'Accept-Language': 'zh-CN,zh;q=0.9'},
+        )
+        with urllib.request.urlopen(req, timeout=BODY_FETCH_TIMEOUT) as resp:
+            html = resp.read().decode('utf-8', errors='replace')
+        import re
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = re.sub(r'&[a-z]+;', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text[:5000]
+    except Exception:
+        return None
+
+
 CATEGORY_KEYWORDS = {
     '🔬 世界性科研突破': {
         '诺贝尔': 5, '世界首次': 5, '全球首次': 5, '首次发现': 5,
@@ -766,6 +796,22 @@ def build_classification_result(today):
             classified[cat_high].append(a)
             continue
         llm_candidates.append(a)
+
+    # G1: 正文信号 for A 原型 — 标题弱但正文有世界首例/期刊等
+    remaining = []
+    for a in llm_candidates:
+        if any(kw in a['title'] for kw in ['研究', '科研', '进展', '实验', '试验', '育种', '水稻']):
+            body = _fetch_page_text(a['url'])
+            if body and any(kw in body for kw in A_BODY_SIGNALS):
+                a['signals'] = None
+                a['score_source'] = 'body-signal'
+                a['category'] = WORLD_CLASS_CATEGORY
+                kw_scores = score_all_categories(a['title'])
+                a['priority'] = priority_score(a['title'], WORLD_CLASS_CATEGORY) + kw_scores.get(WORLD_CLASS_CATEGORY, 0)
+                classified[WORLD_CLASS_CATEGORY].append(a)
+                continue
+        remaining.append(a)
+    llm_candidates = remaining
 
     if llm_candidates:
         batch_signals = score_signals_batch(llm_candidates)
