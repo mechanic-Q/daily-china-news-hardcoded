@@ -17,7 +17,7 @@ Daily 项目已知坑、历史兼容问题、维护陷阱。
 - 风险：MiniMax 官方公开 model id 通常为 `abab6.5*` 或 `MiniMax-M2`，"minimax-m2.7" 未在官方文档出现
 - 影响：调用失败被 `except Exception: return False` **静默吞掉**，涉华判定永远返回 False（即所有需要 LLM 兜底的标题都被判为"不涉华"，被过滤掉）
 - 排查建议：临时打印异常确认是否真的成功
-- 状态：**等待 9router 切换后一并修正**
+- 状态：**等待 qwen-local 切换后一并修正**
 
 ## 🔴 BASE_DIR 硬编码
 

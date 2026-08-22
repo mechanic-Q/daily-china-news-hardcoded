@@ -7,7 +7,7 @@
 # - Chromium headless: /snap/bin/chromium (apt: chromium-browser 或 snap install chromium)
 # - Python: 3.12+
 
-openai>=1.0          # OpenAI SDK（兼容 Zhipu/MiniMax/9router 等 base_url 协议）
+openai>=1.0          # OpenAI SDK（兼容 qwen-local/Zhipu/MiniMax 等 base_url 协议）
 aiohttp>=3.9         # step1_3.py 异步 HTTP-200 校验
 Pillow>=10.0         # step8.py 截图后底部空白裁剪
 python-dotenv>=1.0   # .env 文件加载

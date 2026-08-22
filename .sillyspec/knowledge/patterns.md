@@ -70,4 +70,4 @@ Daily 项目反复出现、可复用的设计模式。
 - Zhipu：`https://open.bigmodel.cn/api/paas/v4/`
 - MiniMax：`https://api.minimax.chat/v1`
 
-模式：`OpenAI(base_url=..., api_key=...)` + 标准 `chat.completions.create`。新增 provider（如 9router、SiliconFlow）按同样方式接入即可，无需新 SDK。
+模式：`OpenAI(base_url=..., api_key=...)` + 标准 `chat.completions.create`。新增 provider（如 qwen-local、SiliconFlow）按同样方式接入即可，无需新 SDK。

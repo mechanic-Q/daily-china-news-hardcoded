@@ -63,7 +63,7 @@ step8.py    (渲染成报)   ->  HTML + PNG
 - **唯一配置**：`llm.yaml` - 改一行即可切换 provider/model
 - **抽象层**：`llm_client.py` - `get_client(call_site_id)` 返回 (OpenAI 实例, model, kwargs)；`call_llm(call_site_id, messages)` 一站式调用
 - **切换 provider**：改 `llm.yaml` 顶层 `provider: <name>` + `model: <string>` 即可，不用改代码
-- **环境变量**：`.env` 中 `NINEROUTER_API_KEY`（主 provider）+ `ZHIPU_API_KEY` / `MINIMAX_API_KEY`（应急保留）
+- **环境变量**：`.env` 中 `LLAMA_API_KEY`（本地 Qwen3.8-27B）+ `ZHIPU_API_KEY` / `MINIMAX_API_KEY`（应急备用）
 
 ### 调用点总览
 
