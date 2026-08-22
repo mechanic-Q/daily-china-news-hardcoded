@@ -32,10 +32,10 @@ source_commit: 5f76a1a
 - key 来源：`os.environ["MINIMAX_API_KEY"]`
 - 失败处理：`except Exception: return False`（静默吞错）
 
-### 2. 9router — 批量涉华判断 & 批量栏目评分（Phase 15E）
+### 2. qwen-local — 批量涉华判断 & 批量栏目评分（Phase 15E）
 - 位置：`step4.py:121` `llm_is_china_related_batch()`, `step4.py:412` `score_signals_batch()`
-- SDK/Provider：`llm_client.call_llm` + `llm.yaml` `9router` 配置
-- `model`：`low`（`base_url: http://localhost:20128/v1`）
+- SDK/Provider：`llm_client.call_llm` + `llm.yaml` `qwen-local` 配置
+- `model: qwen3.8, base_url: http://localhost:8888/v1`）
 - 输入：20 条 / batch，index-based JSON prompt，`temperature=0.0`
 - 失败处理：JSON/schema 失败先重试一次；仍失败后整轮禁用批量 → 逐条 fallback
 - 容错：`_extract_json_array()` 容忍模型返回前后说明文字
@@ -87,12 +87,12 @@ if llm_candidates:
 ## 注意事项
 - 🔴 **MiniMax model 字符串 `'minimax-m2.7'` 可能不是真实 model id**，异常被 `except Exception: return False` 静默吞掉 → 涉华兜底可能长期空跑而无报错
 - 🔴 两个单条 LLM 调用均无超时配置、无重试、无日志；batch 调用有 `temperature=0` 和 `timeout=60s`
-- batch 涉华/评分使用 `9router` provider + `llm.yaml` 配置，不依赖 MiniMax/Zhipu
+- batch 涉华/评分使用 `qwen-local` provider + `llm.yaml` 配置，不依赖 MiniMax/Zhipu
 - batch 失败先重试一次，再采用 fail-fast：首个 batch 失败后整轮禁用批量，回退单条
 - batch JSON 容错：`_extract_json_array()` 自动剥离 think 块、markdown fence、前后说明文字
 - `DEBUG_LLM_BATCH` 环境变量可打印 batch LLM 原始返回前 200 字符
 - 修改时需同步检查的下游：extractor 读 `1新闻_链接.md`（格式：栏目标签 + 来源 + 标题 + URL）
-- 环境变量依赖：`MINIMAX_API_KEY`、`ZHIPU_API_KEY`（单条兜底） + `NINEROUTER_API_KEY`（batch 路径）
+- 环境变量依赖：`MINIMAX_API_KEY`、`ZHIPU_API_KEY`（单条兜底） + `LLAMA_API_KEY`（batch 路径）
 - 文件总行数：约 640
 
 ## 人工备注

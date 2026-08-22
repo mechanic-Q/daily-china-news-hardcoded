@@ -109,6 +109,11 @@ def get_client(call_site_id: str) -> Tuple[OpenAI, str, Dict[str, Any]]:
         "max_tokens": site_cfg["max_tokens"],
         "timeout": site_cfg["timeout"],
     }
+    # ponytail: provider 可选键；仅 qwen-local 用，新 provider 加同键即可
+    if "max_output_tokens" in prov:
+        kwargs["max_tokens"] = min(kwargs["max_tokens"], prov["max_output_tokens"])
+    if prov.get("reasoning") == "off":
+        kwargs["extra_body"] = {"reasoning_effort": "none"}
     return client, cfg["model"], kwargs
 
 
@@ -130,6 +135,9 @@ def call_llm(
             model=model, messages=messages, **kwargs
         )
         content = resp.choices[0].message.content
+        if os.environ.get("DEBUG_LLM_TOKENS"):
+            u = resp.usage
+            print(f"  [TOKENS] {call_site_id}: prompt={u.prompt_tokens} completion={u.completion_tokens} total={u.total_tokens} finish={resp.choices[0].finish_reason}", flush=True)
         if not content or not content.strip():
             finish_reason = resp.choices[0].finish_reason
             rc = getattr(resp.choices[0].message, "reasoning_content", None)

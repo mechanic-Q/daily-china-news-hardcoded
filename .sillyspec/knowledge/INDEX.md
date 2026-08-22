@@ -23,7 +23,7 @@ Daily 项目长期复用知识索引。关键词用 `|` 分隔，用于 execute/
 - 重试|retry|诊断|diagnose|RETRY_PROMPTS|_why_invalid → [智能重试模式](patterns.md#智能重试模式-diagnostic-retry)
 - extract_body|5层|多层|提取|extraction|chain → [多层提取策略链](patterns.md#多层提取策略链-layered-extraction-chain)
 - chromium|dump-dom|抓取|双通道|fetch → [Chromium 双通道抓取](patterns.md#chromium-双通道抓取-dual-channel-fetch)
-- OpenAI 兼容|openai SDK|base_url|provider|zhipu|minimax|9router → [OpenAI 兼容客户端](patterns.md#openai-兼容客户端-openai-compatible-client)
+- OpenAI 兼容|openai SDK|base_url|provider|zhipu|minimax|qwen-local → [OpenAI 兼容客户端](patterns.md#openai-兼容客户端-openai-compatible-client)
 
 ## Known Issues
 - minimax|m2.7|model id|涉华|静默 → [MiniMax 模型字符串可能无效](known-issues.md#-minimax-模型字符串可能无效)
