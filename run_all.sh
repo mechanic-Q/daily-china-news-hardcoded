@@ -53,8 +53,8 @@ start_llm_server() {
         return 0
     fi
     if [[ ! -f "$LLM_SERVER_SCRIPT" ]]; then
-        echo "错误: 找不到 $LLM_SERVER_SCRIPT" >&2
-        exit 1
+        echo "  [LLM] ⚠ 找不到 $LLM_SERVER_SCRIPT，跳过自动启动（需手动启动 LLM 服务）"
+        return 0
     fi
     echo "  [LLM] 启动 Qwen3.8-27B 服务..."
     nohup bash "$LLM_SERVER_SCRIPT" > /tmp/daily-llm-server.log 2>&1 &

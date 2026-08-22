@@ -377,6 +377,7 @@ class TestArchetypeKeywords(unittest.TestCase):
             "url": "https://www.cas.cn/20260725/starch.html",
         }
         with mock.patch("step4.parse_0", return_value=[article]), \
+             mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: arts), \
              mock.patch("step4.call_llm", side_effect=AssertionError("should not call LLM")):
             classified, _ = build_classification_result(datetime.date(2026, 7, 25))
         result = [a for items in classified.values() for a in items][0]
@@ -741,6 +742,7 @@ class TestB2Breakthrough(unittest.TestCase):
         quantity = make_category_signals("🌾 农业", 7)
         quantity["relevance"][WORLD_CLASS_CATEGORY] = 8
         with mock.patch("step4.parse_0", return_value=articles), \
+             mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: arts), \
              mock.patch("step4._fetch_article_body", return_value=None), \
              mock.patch("step4.score_signals_batch", return_value=[phone, quantity]):
             classified, _ = build_classification_result(datetime.date(2026, 7, 25))
