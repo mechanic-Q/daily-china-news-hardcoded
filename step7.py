@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args
 load_dotenv(Path(__file__).parent / '.env')
 
-STEP7_MAX_WORKERS = 3
+STEP7_MAX_WORKERS = 1
 
 def parse_1news(path, today_str):
     """解析 1新闻_链接.md → {normalized_title: {title, category}}"""
