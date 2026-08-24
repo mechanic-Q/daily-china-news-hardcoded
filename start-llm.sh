@@ -23,7 +23,7 @@ MAIN="$HOME/models/qwen38-27b/main-hauhau/Qwen3.8-27B-Uncensored-HauhauCS-Aggres
 [ -f "$MAIN" ] || { echo "缺模型: $MAIN"; exit 1; }
 
 echo "=== Qwen3.8-27B 破限版 (Daily: 纯文本/思维链关/串行/ctx 32768) ==="
-echo "API: http://localhost:8888/v1  (Ctrl+C 停止)"
+echo "API: http://localhost:8899/v1  (Ctrl+C 停止)"
 echo ""
 
 exec "$BIN" \
@@ -38,4 +38,4 @@ exec "$BIN" \
     --jinja \
     --chat-template-file "$HOME/projects/Daily/qwen3-tolerant.tmpl" \
     --alias qwen3.8 \
-    --host 0.0.0.0 --port 8888
+    --host 0.0.0.0 --port 8899

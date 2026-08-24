@@ -1,8 +1,8 @@
 #!/bin/bash
-# bench_llm.sh — 基准: 对运行中的 8888 服务发 3 个长生成请求, 报 tok/s
+# bench_llm.sh — 基准: 对运行中的 8899 服务发 3 个长生成请求, 报 tok/s
 # 用法: bash bench_llm.sh [port]
 set -euo pipefail
-PORT="${1:-8888}"
+PORT="${1:-8899}"
 python3 - "$PORT" <<'EOF'
 import sys, urllib.request, json, time
 port = sys.argv[1]

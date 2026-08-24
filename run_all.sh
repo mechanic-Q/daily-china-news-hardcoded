@@ -38,19 +38,33 @@ if [[ ! -x "$PYTHON" ]]; then
     exit 1
 fi
 
-# --- 本地 LLM 服务生命周期 (Qwen3.8-27B @ localhost:8888) ---
+# --- 本地 LLM 服务生命周期 (Qwen3.8-27B @ localhost:8899, 专属端口, 用完必关) ---
 LLM_SERVER_SCRIPT="$SCRIPT_DIR/start-llm.sh"
-LLM_SERVER_PORT=8888
+LLM_SERVER_PORT=8899
 LLM_PID=""
 
 llm_server_up() {
     curl -sf -m 2 "http://localhost:$LLM_SERVER_PORT/v1/models" >/dev/null 2>&1
 }
 
+# 提取本专属端口上实际监听的 llama-server PID (很可能只有自家残留)
+port_pids() {
+    ss -ltnp 2>/dev/null | awk -v p=":$LLM_SERVER_PORT" \
+        '$1=="LISTEN" && $4~p { for(i=1;i<=NF;i++) if($i~/pid=/) { sub(/.*pid=/,"",$i); sub(/,.*/,"",$i); print $i } }'
+}
+
 start_llm_server() {
-    if llm_server_up; then
-        echo "  [LLM] 服务已在运行"
+    local existing
+    existing=$(port_pids | head -n1)
+    if [[ -n "$existing" ]] && llm_server_up; then
+        LLM_PID="$existing"   # 复用自家残留, 用完同样关闭
+        echo "  [LLM] 服务已在运行 (pid=$LLM_PID)"
         return 0
+    fi
+    if [[ -n "$existing" ]]; then
+        echo "  [LLM] 端口 $LLM_SERVER_PORT 被异常进程占用, 先清理: $existing"
+        kill "$existing" 2>/dev/null || true
+        sleep 1
     fi
     if [[ ! -f "$LLM_SERVER_SCRIPT" ]]; then
         echo "  [LLM] ⚠ 找不到 $LLM_SERVER_SCRIPT，跳过自动启动（需手动启动 LLM 服务）"
@@ -67,16 +81,24 @@ start_llm_server() {
         sleep 2
     done
     echo "错误: LLM 服务 180s 内未就绪，日志: /tmp/daily-llm-server.log" >&2
-    kill "$LLM_PID" 2>/dev/null || true
+    stop_llm_server
     exit 1
 }
 
 stop_llm_server() {
-    if [[ -n "$LLM_PID" ]]; then
-        echo "  [LLM] 停止服务 (pid=$LLM_PID)..."
-        kill "$LLM_PID" 2>/dev/null || true
+    local pids unique=""
+    pids=$(port_pids)
+    for p in $LLM_PID $pids; do
+        [[ " $unique " == *" $p "* ]] && continue
+        unique="$unique $p"
+        echo "  [LLM] 停止服务 (pid=$p)..."
+        kill "$p" 2>/dev/null || true
+    done
+    if [[ -n "$unique" ]]; then
         sleep 1
-        kill -9 "$LLM_PID" 2>/dev/null || true
+        for p in $unique; do
+            kill -9 "$p" 2>/dev/null || true
+        done
         LLM_PID=""
     fi
 }
