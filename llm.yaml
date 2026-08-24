@@ -28,7 +28,7 @@ provider: qwen-local
 providers:
   qwen-local:
     api_key_env: LLAMA_API_KEY
-    base_url: http://localhost:8888/v1
+    base_url: http://localhost:8899/v1
     max_output_tokens: 16384
     reasoning: "off"
   minimax:

@@ -35,7 +35,7 @@ source_commit: 5f76a1a
 ### 2. qwen-local — 批量涉华判断 & 批量栏目评分（Phase 15E）
 - 位置：`step4.py:121` `llm_is_china_related_batch()`, `step4.py:412` `score_signals_batch()`
 - SDK/Provider：`llm_client.call_llm` + `llm.yaml` `qwen-local` 配置
-- `model: qwen3.8, base_url: http://localhost:8888/v1`）
+- `model: qwen3.8, base_url: http://localhost:8899/v1`
 - 输入：20 条 / batch，index-based JSON prompt，`temperature=0.0`
 - 失败处理：JSON/schema 失败先重试一次；仍失败后整轮禁用批量 → 逐条 fallback
 - 容错：`_extract_json_array()` 容忍模型返回前后说明文字
