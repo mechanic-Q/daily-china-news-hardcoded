@@ -53,6 +53,10 @@ def _extract_ckxx_content_txt(html):
 
 
 def extract_body(html, url):
+    if 'cas.cn' in url:
+        body = _extract_cas_article_txt(html)
+        if body:
+            return body
     m = tf_extract(html, output_format="txt", include_comments=False, include_tables=False, favor_precision=True)
     body = m.strip() if m else None
     if (body is None or len(body) < 100) and ('ckxxapp' in url or 'cankaoxiaoxi' in url):
@@ -77,6 +81,17 @@ def _cas_postprocess(text):
         r'中国科学院贯彻落实党中央.*?创新型大学。\s*',
         '', text, flags=re.S
     )
+    return text
+
+
+def _extract_cas_article_txt(html):
+    m = re.search(r'<div class="trs_editor_view[^"]*">(.*?)</div>', html, re.S)
+    if not m:
+        return None
+    text = re.sub(r'<[^>]+>', ' ', m.group(1))
+    text = re.sub(r'\s+', ' ', text).strip()
+    if len(text) < 10:
+        return None
     return text
 
 
