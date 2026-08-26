@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from step6 import (
     _postprocess_text, _is_contaminated,
     _people_postprocess, _cas_postprocess, _cctv_postprocess,
-    _extract_ckxx_content_txt,
+    _extract_ckxx_content_txt, _extract_cas_article_txt,
     fetch_and_extract,
     run,
 )
@@ -80,8 +80,45 @@ class TestCctvPostprocess(unittest.TestCase):
         self.assertNotIn("播放(p)", result)
 
 
-class TestCkxxExtract(unittest.TestCase):
+class TestCasArticleExtract(unittest.TestCase):
 
+    def test_extract_cas_article_txt_skips_nav(self):
+        html = (
+            '<dl class="nav_down"><dd>主要职责</dd><dd>办院方针</dd>'
+            '<dd>科技奖励</dd><dd>科技期刊</dd><dd>科技专项</dd>'
+            '<dd>中国科学院学部</dd><dd>中国科学院院部</dd><dd>语音播报</dd></dl>'
+            '<div class="xl_content"><div class="trs_editor_view TRS_UEDITOR trs_paper_default trs_web">'
+            '<p>记者从中国科学院物理研究所获悉，该所孟庆波研究员团队成功制备出大面积铜锌锡硫硒薄膜光伏组件，'
+            '组件光电转换效率达到13.0%，刷新了该类组件效率的世界纪录，为下一代低成本、环境友好型太阳能电池产业化奠定坚实基础。</p>'
+            '<p>铜锌锡硫硒是一种新型薄膜光伏材料，由铜、锌、锡等地球储量丰富、价格低廉且环境友好的元素组成。</p></div></div>'
+        )
+        result = _extract_cas_article_txt(html)
+        self.assertIsNotNone(result)
+        for kw in ['主要职责', '办院方针', '科技奖励', '科技期刊', '科技专项', '语音播报']:
+            self.assertNotIn(kw, result or "")
+        self.assertIn('记者从中国科学院物理研究所获悉', result or "")
+
+    def test_extract_cas_article_txt_no_container(self):
+        html = '<html><body><p>没有 TRS 文章容器</p></body></html>'
+        self.assertIsNone(_extract_cas_article_txt(html))
+
+    def test_extract_cas_article_txt_video_caption(self):
+        html = (
+            '<div class="xl_content"><div class="trs_editor_view TRS_UEDITOR">'
+            '<video src="x.mp4" width="700"></video>'
+            '<p>揭示经典非溶剂诱导相分离成膜理论新机制（视频由AI生成）</p>'
+            '</div><!--文章正文--></div>'
+        )
+        result = _extract_cas_article_txt(html)
+        self.assertIsNotNone(result)
+        self.assertIn('揭示经典非溶剂诱导相分离成膜理论新机制', result or "")
+
+    def test_extract_cas_article_txt_too_short(self):
+        html = '<div class="xl_content"><div class="trs_editor_view"><p>short</p></div></div>'
+        self.assertIsNone(_extract_cas_article_txt(html))
+
+
+class TestCkxxExtract(unittest.TestCase):
     def test_extract_ckxx_content_txt(self):
         content_txt = "test content " + "x" * 200
         html = f'''<html><script>var contentTxt = "{content_txt}"; var other = 1;</script></html>'''
