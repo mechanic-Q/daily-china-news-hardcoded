@@ -9,6 +9,80 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import step7
 
 
+class TestPlaceholderRetryChain(unittest.TestCase):
+    """占位文本必须永不进入概述：LLM 顽固输出占位 → 重试3次耗完 → 返回 None → 走规则 fallback。"""
+
+    def test_placeholder_never_survives_llm_summarize(self):
+        placeholder = "由于提供的正文仅包含日期和天气，未包含具体新闻事实，无法概括实质内容。现有信息仅表明9月1日天气晴朗。"
+        with mock.patch("llm_client.call_llm", return_value=placeholder) as m:
+            result = step7.llm_summarize("一根玉米", "9月1日 晴\n真实正文…")
+        # 3 次尝试全部被占位拦截 → 返回 None（不把占位当摘要）
+        self.assertIsNone(result)
+        self.assertEqual(m.call_count, 3)
+
+    def test_placeholder_then_good_summary_accepted(self):
+        placeholder = "请提供新闻正文内容，我才能根据具体信息生成摘要。"
+        good = "泥石流灾害后，村民达娃免费向救援人员及群众提供热玉米。"
+        with mock.patch("llm_client.call_llm", side_effect=[placeholder, good]) as m:
+            result = step7.llm_summarize("一根玉米", "9月1日 晴\n真实正文…")
+        # 第1次占位被拦截 → 重试 → 第2次正常 → 返回好摘要
+        self.assertEqual(result, good)
+        self.assertEqual(m.call_count, 2)
+
+    def test_placeholder_worker_falls_back_to_rule_summary(self):
+        """整条 worker 链路：LLM 占位 → llm_summarize None → fallback_summarize 用真实首句。"""
+        placeholder = "请提供新闻正文内容，我才能根据具体信息生成摘要。"
+        body = "9月1日 晴。中午采访完，我又去了趟安置点。在村口，村民达娃捞出一根玉米递过来。"
+        with mock.patch("llm_client.call_llm", return_value=placeholder):
+            idx, summary, fallback = step7.summarize_article_worker(0, {"title": "一根玉米", "body": body})
+        self.assertTrue(fallback)
+        # fallback 用真实正文首句，不含占位特征
+        self.assertIn("采访完", summary)
+        for pat in step7.PLACEHOLDER_PATTERNS:
+            self.assertNotIn(pat, summary)
+
+
+class TestPlaceholderDetection(unittest.TestCase):
+    def test_placeholder_summary_detected(self):
+        # 2026-09-02 实际占位文本
+        bad = "由于提供的正文仅包含日期和天气，未包含具体新闻事实，无法概括实质内容。现有信息仅表明9月1日天气晴朗。"
+        self.assertEqual(step7._why_invalid(bad, "真实正文"), "placeholder")
+
+    def test_normal_summary_passes(self):
+        good = "泥石流灾害后，村民达娃免费向救援人员及群众提供热玉米，其子尼玛多吉亦积极协助物资运输。"
+        self.assertIsNone(step7._why_invalid(good, "真实正文"))
+
+
+class TestParse2NewsMultilineBody(unittest.TestCase):
+    def test_multiline_body_is_not_truncated(self):
+        tmp = Path("/tmp/2news_multiline.md")
+        tmp.write_text(
+            "# 2026-09-02 新闻（已审核）\n\n"
+            "## 【人民日报】一根玉米\n\n"
+            "来源：人民日报  发布时间：2026-09-02\n\n"
+            "正文：9月1日 晴\n"
+            "中午采访完，我又去了趟安置点。\n"
+            "在村口，村民达娃捞出一根玉米递过来。\n",
+            encoding="utf-8",
+        )
+        d = step7.parse_2news(tmp, "2026-09-02")
+        self.assertEqual(d["一根玉米"]["body"], "9月1日 晴\n中午采访完，我又去了趟安置点。\n在村口，村民达娃捞出一根玉米递过来。")
+        tmp.unlink()
+
+    def test_single_line_body_unchanged(self):
+        tmp = Path("/tmp/2news_single.md")
+        tmp.write_text(
+            "# 2026-09-02 新闻（已审核）\n\n"
+            "## 【新华社】智神星一号\n\n"
+            "来源：新华社  发布时间：2026-09-02\n\n"
+            "正文：记者从星河动力航天公司获悉，火箭首飞成功。\n",
+            encoding="utf-8",
+        )
+        d = step7.parse_2news(tmp, "2026-09-02")
+        self.assertEqual(d["智神星一号"]["body"], "记者从星河动力航天公司获悉，火箭首飞成功。")
+        tmp.unlink()
+
+
 class TestRejectFailureBody(unittest.TestCase):
     def test_run_rejects_placeholder_body(self):
         with \

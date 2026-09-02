@@ -67,11 +67,16 @@ def parse_2news(path, today_str):
         else:
             src = ""
             title_raw = title_line.strip()
-        body = ""
+        body_lines = []
+        started = False
         for line in lines:
             if line.startswith("正文："):
-                body = line[3:].strip()
-                break
+                started = True
+                body_lines.append(line[3:].strip())
+                continue
+            if started and line.strip():
+                body_lines.append(line.strip())
+        body = "\n".join(body_lines)
         key = re.sub(r'\s+', '', title_raw)
         result[key] = {"title": title_raw, "src": src, "body": body}
     return result
@@ -101,6 +106,12 @@ COT_LEAK_PATTERNS = [
     '让我总结', '关键在于', '主要信息', '关键点', 'core points',
 ]
 
+# 占位/空转摘要特征（LLM 收到残缺输入或未理解时输出这类文本，必须拦截）
+PLACEHOLDER_PATTERNS = [
+    '请提供', '我才能根据', '无法概括', '正文仅包含', '仅表明',
+    '无法生成', '请补充', '未包含具体新闻事实', '不包含具体',
+]
+
 
 def _why_invalid(summary, body):
     """诊断摘要失败原因，返回 None 表示有效，否则返回原因字符串"""
@@ -115,6 +126,9 @@ def _why_invalid(summary, body):
     for pat in COT_LEAK_PATTERNS:
         if pat in summary:
             return "cot_leak"
+    for pat in PLACEHOLDER_PATTERNS:
+        if pat in summary:
+            return "placeholder"
     return None
 
 
@@ -123,6 +137,7 @@ RETRY_PROMPTS = {
     "too_long": "输出严格限制在1-2句话，简洁概括核心要点，不要超过100字。",
     "body_copy": "用自己的话重新组织概括，不要直接复制原文中的句子。",
     "too_short": "请输出完整一句话的摘要，至少包含一个完整的结论。",
+    "placeholder": "刚才的摘要没有基于正文内容。请直接根据正文写出真实新闻摘要，不要提及缺少内容或请求补充。",
 }
 
 

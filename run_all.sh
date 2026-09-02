@@ -135,6 +135,19 @@ for step in "${STEPS[@]}"; do
     echo "⏱ $step: ${step_duration}s"
     if [[ "$step" == "step7.py" ]]; then
         stop_llm_server
+        # --- 摘要质量闸门：占位/空转摘要必须拦截，不让垃圾进报纸 ---
+        overview="/mnt/e/每日新中国/$DATE/3新闻_概述.md"
+        if [[ -f "$overview" ]]; then
+            if grep -qE "请提供|我才能根据|无法概括|正文仅包含|仅表明|无法生成|请补充|未包含具体新闻事实" "$overview"; then
+                echo ""
+                echo "❌ 摘要质量闸门：$DATE 的 3新闻_概述.md 含占位摘要，报纸不生成。"
+                echo "   命中行："
+                grep -nE "请提供|我才能根据|无法概括|正文仅包含|仅表明|无法生成|请补充|未包含具体新闻事实" "$overview" | head -10
+                echo "   处理：人工改写概述后重跑 step8（python3 step8.py --date $DATE）"
+                exit 1
+            fi
+            echo "  ✅ 摘要质量闸门通过（无占位摘要）"
+        fi
     fi
 done
 

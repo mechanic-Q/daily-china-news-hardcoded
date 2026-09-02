@@ -18,7 +18,7 @@ call_sites:
   summarize:
     max_tokens: 512
     temperature: 0.7
-    timeout: 60
+    timeout: 180
   monthly-overview:
     max_tokens: 1200
     temperature: 0.7
