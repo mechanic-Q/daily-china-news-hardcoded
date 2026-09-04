@@ -326,6 +326,7 @@ def main() -> None:
     parser.add_argument("--date", help="YYYY-MM-DD; defaults to cron run day")
     parser.add_argument("--skip-run-all", action="store_true", help="debug only")
     parser.add_argument("--skip-send", action="store_true", help="debug only")
+    parser.add_argument("--png-only", action="store_true", help="only run pipeline and send the PNG newspaper; skip video build")
     args = parser.parse_args()
 
     date_s = today_or_arg(args.date)
@@ -338,6 +339,18 @@ def main() -> None:
         run([str(RUN_ALL), "--date", date_s], cwd=DAILY_DIR, timeout=3600)
 
     png = find_png(date_s, started_at)
+    if args.png_only:
+        if not args.skip_send:
+            env = load_env()
+            token = feishu_token(env)
+            chat_id = feishu_chat_id(env)
+            send_text(token, chat_id, f"每日新中国 {date_s} 报纸已生成。")
+            send_image(token, chat_id, png)
+            log("Feishu PNG delivery completed")
+        else:
+            log("skip-send enabled; delivery skipped")
+        return
+
     overview = BASE_DIR / date_s / "3新闻_概述.md"
     sections = parse_overview(overview)
     video = build_video(date_s, sections)

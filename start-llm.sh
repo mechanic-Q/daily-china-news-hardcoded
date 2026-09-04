@@ -17,7 +17,7 @@
 set -euo pipefail
 
 BIN="$HOME/projects/llama-dflash2/llama.cpp/build/bin/llama-server"
-MAIN="$HOME/models/qwen38-27b/main-hauhau/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-IQ3_XS.gguf"
+MAIN="$HOME/models/llm/qwen38-27b/main-hauhau/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-IQ3_XS.gguf"
 
 [ -f "$BIN" ]  || { echo "缺 llama-server: $BIN";  exit 1; }
 [ -f "$MAIN" ] || { echo "缺模型: $MAIN"; exit 1; }
