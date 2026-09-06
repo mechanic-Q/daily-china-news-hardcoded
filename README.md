@@ -1,5 +1,15 @@
 # 每日新中国 · Daily China News
 
+<p align="center">
+  <img src="https://img.shields.io/badge/信源-7_个权威中文媒体-c94f4f" alt="7 个权威中文信源">
+  &nbsp;
+  <img src="https://img.shields.io/badge/分类-关键词加权_%2B_GLM--4_Flash-4a9eff" alt="关键词加权 + GLM-4 Flash 双引擎分类">
+  &nbsp;
+  <img src="https://img.shields.io/badge/输出-HTML_·_PNG_1080px-3ddc97" alt="输出 HTML 与 1080px PNG">
+  &nbsp;
+  <img src="https://img.shields.io/badge/管线-100%25_确定性-f0b429" alt="100% 确定性管线">
+</p>
+
 > **中国很大 我想去看看** · *China is vast — let's take a look*
 
 自动采集、筛选、分类、摘要、渲染全流程的「每日新中国」手机报纸。每天从 7 个中国权威信源采集当日新闻，经 LLM 摘要生成，渲染为 1080px 宽版手机壁纸风格报纸。
