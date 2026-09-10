@@ -723,15 +723,27 @@ class TestEventDedup(unittest.TestCase):
         self.assertEqual(kept, [articles[0], articles[2]])
         self.assertEqual(audit[0]["removed"], [1])
 
-    def test_llm_review_invalid_json_stops_with_context(self):
+    def test_llm_review_invalid_json_keeps_group_and_continues(self):
+        # 烂格式不再炸管道：重试一次后整组保留，继续跑后续组
         articles = [
             {"title": "同一成果报道甲", "url": "https://example.com/a"},
             {"title": "同一成果报道乙", "url": "https://example.com/b"},
+            {"title": "同一成果报道丙", "url": "https://example.com/c"},
         ]
 
-        with mock.patch("step4.call_llm", return_value="not json"):
-            with self.assertRaisesRegex(ValueError, "event-dedup"):
-                step4.llm_review_duplicate_candidates(articles, [[0, 1]])
+        good = json.dumps({
+            "duplicate_groups": [{"indices": [0, 1], "keep": 0, "reason": "同一事件"}]
+        }, ensure_ascii=False)
+
+        # 组1两次都烂 → 整组保留；组2返回正常 → 去掉1条
+        with mock.patch("step4.call_llm", side_effect=["not json", "still bad", good]) as m:
+            kept, audit = step4.llm_review_duplicate_candidates(articles, [[0, 1], [0, 2]])
+        self.assertEqual([a["title"] for a in kept], ["同一成果报道甲", "同一成果报道乙"])
+        self.assertEqual(m.call_count, 3)
+        self.assertEqual(len(audit), 2)
+        self.assertEqual(audit[0]["removed"], [])
+        self.assertIn("整组保留", audit[0]["reason"])
+        self.assertEqual(audit[1]["removed"], [2])
 
     def test_classification_deduplicates_same_event_before_selection(self):
         today = datetime.date(2026, 7, 14)

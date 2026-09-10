@@ -337,7 +337,11 @@ def find_duplicate_candidate_groups(articles):
 
 
 def llm_review_duplicate_candidates(articles, candidate_groups):
-    """让 LLM 复核疑似组；只删除 LLM 明确判为同一事件的条目。"""
+    """让 LLM 复核疑似组；只删除 LLM 明确判为同一事件的条目。
+
+    LLM 返回烂格式时重试一次，仍失败则该组整组保留（宁漏删不误删），
+    绝不让格式抖动炸掉整条管道。
+    """
     removed = set()
     audit = []
     for candidates in candidate_groups:
@@ -349,22 +353,46 @@ def llm_review_duplicate_candidates(articles, candidate_groups):
             + "\n".join(f"[{local}] {articles[global_i]['title']}" for local, global_i in enumerate(candidates))
             + '\n\nJSON格式：{"duplicate_groups":[{"indices":[0,1],"keep":0,"reason":"共同事实"}]}'
         )
-        raw = call_llm(
-            "event-dedup",
-            messages=[
-                {"role": "system", "content": "你只能输出 JSON 对象，不要输出 markdown 或其他文字。"},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-            extra_body={"reasoning_effort": "none"},
-        )
-        try:
-            parsed = json.loads(_strip_llm_json(raw))
-        except (TypeError, json.JSONDecodeError) as e:
-            raise ValueError(f"event-dedup JSON 无效: {e}") from e
+        parsed = None
+        last_error = None
+        for attempt in range(2):
+            try:
+                raw = call_llm(
+                    "event-dedup",
+                    messages=[
+                        {"role": "system", "content": "你只能输出 JSON 对象，不要输出 markdown 或其他文字。"},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.0,
+                    extra_body={"reasoning_effort": "none"},
+                )
+                parsed = json.loads(_strip_llm_json(raw))
+                break
+            except (TypeError, json.JSONDecodeError, LLMCallError) as e:
+                last_error = e
+                if attempt == 0:
+                    print(f"  ⚠ event-dedup 返回无效，重试一次: {e}", file=sys.stderr)
+
+        if parsed is None:
+            print(f"  ⚠ event-dedup 两次无效，该组保留全部 {len(candidates)} 条: {last_error}", file=sys.stderr)
+            audit.append({
+                "indices": [candidates[i] for i in range(len(candidates))],
+                "keep": None,
+                "removed": [],
+                "reason": f"event-dedup 不可用，整组保留: {last_error}",
+            })
+            continue
+
         groups = parsed.get('duplicate_groups') if isinstance(parsed, dict) else None
         if not isinstance(groups, list):
-            raise ValueError("event-dedup 返回缺少 duplicate_groups 列表")
+            print(f"  ⚠ event-dedup 返回缺少 duplicate_groups 列表，该组保留全部 {len(candidates)} 条", file=sys.stderr)
+            audit.append({
+                "indices": [candidates[i] for i in range(len(candidates))],
+                "keep": None,
+                "removed": [],
+                "reason": "event-dedup 格式无效，整组保留",
+            })
+            continue
         used = set()
         for group in groups:
             indices = group.get('indices') if isinstance(group, dict) else None
