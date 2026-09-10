@@ -308,6 +308,42 @@ class TestConditionalExclusion(unittest.TestCase):
         self.assertNotIn(articles[3]["title"], results)
 
 
+class TestBlockedNewsFilter(unittest.TestCase):
+
+    def test_blocked_term_title_dropped_before_llm_calls(self):
+        today = datetime.date(2026, 9, 10)
+        articles = [
+            {"date": "2026-09-10", "title": "习近平向全国广大教师致以节日祝贺", "url": "https://paper.people.com.cn/a.html"},
+            {"date": "2026-09-10", "title": "我国科学家发布新型材料", "url": "https://www.news.cn/b.html"},
+        ]
+        with mock.patch("step4.parse_0", return_value=articles), \
+             mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: arts) as china_mock, \
+             mock.patch("step4.score_signals_batch", return_value=[make_category_signals("🧱 材料")]):
+            classified, _ = build_classification_result(today)
+        results = {a["title"]: a["category"] for items in classified.values() for a in items}
+        self.assertNotIn(articles[0]["title"], results)
+        self.assertIn(articles[1]["title"], results)
+        # 被剔除的条目不应进入任何 LLM 调用
+        for call in china_mock.call_args_list:
+            for art in call.args[0]:
+                self.assertNotIn("习近平", art["title"])
+
+    def test_blocked_term_variants_all_dropped(self):
+        today = datetime.date(2026, 9, 10)
+        articles = [
+            {"date": "2026-09-10", "title": "习主席视察某部队", "url": "https://www.news.cn/a.html"},
+            {"date": "2026-09-10", "title": "习总书记的重要论述学习体会", "url": "https://www.news.cn/b.html"},
+            {"date": "2026-09-10", "title": "我国科学家取得新突破", "url": "https://www.news.cn/c.html"},
+        ]
+        with mock.patch("step4.parse_0", return_value=articles), \
+             mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: arts), \
+             mock.patch("step4.score_signals_batch", return_value=[make_category_signals("🔬 世界性科研突破")]):
+            classified, _ = build_classification_result(today)
+        results = {a["title"] for items in classified.values() for a in items}
+        self.assertEqual(len(results), 1)
+        self.assertIn("我国科学家取得新突破", results)
+
+
 class TestNonResearchGuard(unittest.TestCase):
     """T4 世突非科研负向闸"""
 

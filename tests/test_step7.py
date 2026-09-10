@@ -194,11 +194,14 @@ class TestBlockedTermRewrite(unittest.TestCase):
 
 class TestOverviewSourceLabel(unittest.TestCase):
 
-    def test_run_rewrites_blocked_terms_in_heading(self):
+    def test_run_drops_article_whose_heading_has_blocked_term(self):
+        # 含"习近平"的条目改为整体剔除（不再走改写保留路径）
         with \
             mock.patch("step7.parse_1news", return_value={"key": {"title": "习近平将出席人工智能大会开幕式并讲话", "category": "🤖 AI智能前沿"}}), \
-            mock.patch("step7.parse_2news", return_value={"key": {"title": "习近平将出席人工智能大会开幕式并讲话", "src": "人民日报", "body": "足够长的测试正文，用于生成新闻摘要并验证标题屏蔽词改写。"}}), \
-            mock.patch("step7.llm_summarize", return_value="这场人工智能大会开幕式将以最高规格举行，体现出对相关议题的高度重视。"):
+            mock.patch("step7.parse_2news", return_value={"key": {"title": "习近平将出席人工智能大会开幕式并讲话", "src": "人民日报", "body": "足够长的测试正文，用于生成新闻摘要并验证标题屏蔽词处理。"}}), \
+            mock.patch("step7.llm_summarize", return_value="这场人工智能大会开幕式将以最高规格举行，体现出对相关议题的高度重视。"), \
+            mock.patch("step4.find_duplicate_candidate_groups", return_value=[]), \
+            mock.patch("step7.BASE_DIR", Path("/tmp")):
             import datetime, io, contextlib
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
@@ -206,6 +209,7 @@ class TestOverviewSourceLabel(unittest.TestCase):
             output = buf.getvalue()
             self.assertNotIn("习近平", output)
             self.assertNotIn("国家主席", output)
+            self.assertNotIn("### [人民日报]", output)
 
     def test_run_output_has_source_prefix(self):
         with \
@@ -290,3 +294,51 @@ class TestPreOverviewDuplicateGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBlockedNewsHardDrop(unittest.TestCase):
+
+    def test_run_drops_article_with_blocked_term_in_title(self):
+        news1 = {
+            "bad": {"title": "习近平向全国教师致以节日祝贺", "category": "🚀 科技"},
+            "safe": {"title": "科学家发布新模型", "category": "🚀 科技"},
+        }
+        news2 = {
+            "bad": {"src": "人民日报", "body": "教师节相关报道的足够长正文内容。"},
+            "safe": {"src": "新华社", "body": "科学模型发布的足够长正文内容。"},
+        }
+        with mock.patch("step7.parse_1news", return_value=news1), \
+             mock.patch("step7.parse_2news", return_value=news2), \
+             mock.patch("step7.llm_summarize", return_value="模型发布提升了科研效率。"), \
+             mock.patch("step4.find_duplicate_candidate_groups", return_value=[]), \
+             mock.patch("step7.BASE_DIR", Path("/tmp")):
+            import datetime, io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                step7.run(datetime.date(2026, 9, 10), dry_run=True)
+        output = buf.getvalue()
+        self.assertNotIn("习近平", output)
+        self.assertNotIn("### [人民日报]", output)
+        self.assertIn("### [新华社] 科学家发布新模型", output)
+
+    def test_run_drops_article_with_blocked_term_in_body_only(self):
+        news1 = {
+            "bad": {"title": "会议在北京举行", "category": "🚀 科技"},
+            "safe": {"title": "科学家发布新模型", "category": "🚀 科技"},
+        }
+        news2 = {
+            "bad": {"src": "人民日报", "body": "习近平在会上发表重要讲话，强调创新发展。"},
+            "safe": {"src": "新华社", "body": "科学模型发布的足够长正文内容。"},
+        }
+        with mock.patch("step7.parse_1news", return_value=news1), \
+             mock.patch("step7.parse_2news", return_value=news2), \
+             mock.patch("step7.llm_summarize", return_value="模型发布提升了科研效率。"), \
+             mock.patch("step4.find_duplicate_candidate_groups", return_value=[]), \
+             mock.patch("step7.BASE_DIR", Path("/tmp")):
+            import datetime, io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                step7.run(datetime.date(2026, 9, 10), dry_run=True)
+        output = buf.getvalue()
+        self.assertNotIn("### [人民日报] 会议在北京举行", output)
+        self.assertIn("### [新华社] 科学家发布新模型", output)

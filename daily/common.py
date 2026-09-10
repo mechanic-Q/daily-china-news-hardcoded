@@ -52,6 +52,26 @@ def parse_common_args() -> Tuple[date, bool]:
     return dt, dry
 
 
+BLOCKED_NEWS_TERMS: list[str] = ['习近平', '习主席', '习总书记']
+
+# "习主席"/"习总书记" 会被 "学习主席讲话""练习主席台"这类动词+主席/总书记的
+# 边界误切。只排除确定为学习动词的前字（学习/练习/复习/预习/补习/温习）；
+# 不排除 实、见 等，因为"落实习主席""会见习主席"是真指称，误伤更危险。
+# 注意"学习习主席重要讲话"里 习主席 的前字是 习 而非 学，仍能正确命中。
+# "习近平"无此歧义，直接子串匹配。
+_BLOCKED_TERM_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r'习近平'),
+    re.compile(r'(?<![学练复预补温])习(?:主席|总书记)'),
+]
+
+
+def contains_blocked_term(text: str) -> bool:
+    """news 文本（标题或正文）是否带有需整体剔除的敏感词。"""
+    if not text:
+        return False
+    return any(p.search(text) for p in _BLOCKED_TERM_PATTERNS)
+
+
 def detect_source(url: str) -> str:
     if not url:
         return ''

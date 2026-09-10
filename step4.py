@@ -21,7 +21,8 @@ from pathlib import Path
 from llm_client import call_llm, LLMCallError
 from news_archive import normalize_url
 
-from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, detect_source, clean_news_title
+from daily.common import (BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args,
+                          detect_source, clean_news_title, contains_blocked_term)
 
 WORLD_CLASS_THRESHOLD = 7
 WORLD_CLASS_CATEGORY = '🔬 世界性科研突破'
@@ -832,6 +833,11 @@ def build_classification_result(today):
 
     articles = [a for a in articles if detect_source(a["url"])]
     articles = [a for a in articles if is_quality_news(a["title"])]
+
+    blocked = [a for a in articles if contains_blocked_term(a["title"])]
+    if blocked:
+        print(f"  ⏭️ 剔除 {len(blocked)} 条涉敏感词条目（标题，已省略）")
+        articles = [a for a in articles if not contains_blocked_term(a["title"])]
     articles = [a for a in articles if not _is_conditional_excluded(
         a["title"], DIPLOMATIC_PROTOCOL, rescue_categories=COLUMN_ORDER
     )]
