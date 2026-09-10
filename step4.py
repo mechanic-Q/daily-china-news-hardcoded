@@ -110,10 +110,8 @@ CHINA_KEYWORDS = [
     '中国', '我国', '国产', '中华', '中方', '在华', '访华', '驻华', '对华', '涉华',
     '中央', '纪委', '监委', '国务院',
     '全国政协', '全国人大', '十四届',
-    '商务部', '外交部', '国防部', '工信部', '公安部',
     '解放军', '武警',
-    '中美', '中俄', '中非', '中日', '中欧', '中法', '中德', '中英', '中韩',
-    '中越', '中澳', '中巴', '中阿', '两岸',
+    '两岸',
     '北京', '上海', '深圳', '广东', '浙江', '江苏', '山东', '四川', '河南',
     '湖北', '湖南', '河北', '福建', '安徽', '辽宁', '陕西', '云南', '贵州',
     '广西', '山西', '吉林', '黑龙江', '江西', '重庆', '天津',
@@ -128,6 +126,15 @@ CHINA_KEYWORDS = [
     '两会',
 ]
 
+# 易跨词/歧义误命中的词，命中后仍需 LLM 复核：
+# - 国家对词会被相邻字拼出（"击中俄""访美中""日中"等），不代表双边关系
+# - 国家机构词会命中外国机构（"俄国防部""美国防部长""日本外交部"）
+CHINA_AMBIGUOUS_KEYWORDS = [
+    '商务部', '外交部', '国防部', '工信部', '公安部',
+    '中美', '中俄', '中非', '中日', '中欧', '中法', '中德', '中英', '中韩',
+    '中越', '中澳', '中巴', '中阿',
+]
+
 CHINA_DOMAINS = [
     'xinhuanet.com', 'news.cn', 'people.com.cn', 'cctv.com',
     'chinanews.com', 'china.com.cn', 'ce.cn', 'cnr.cn',
@@ -139,6 +146,13 @@ CHINA_DOMAINS = [
 
 def is_china_related(title):
     for kw in CHINA_KEYWORDS:
+        if kw in title:
+            return True
+    return False
+
+
+def hits_china_ambiguous_keyword(title):
+    for kw in CHINA_AMBIGUOUS_KEYWORDS:
         if kw in title:
             return True
     return False
@@ -247,6 +261,31 @@ def _normalized_event_title(title):
     return re.sub(r'[^0-9a-z\u4e00-\u9fff]+', '', unicodedata.normalize('NFKC', title).lower())
 
 
+# 高频通用词：同日标题偶然共享这些 5 字词不代表同一事件（如栏目名、政策口号、
+# 常见技术名词），不作为"共享罕见长词"候选的依据。仅影响候选判定，不直接删稿。
+GENERIC_SHARED_PHRASES = [
+    '太阳能电池', '新能源汽车', '人工智能', '高质量发展', '乡村振兴',
+    '数据中心', '载人航天', '商业航天', '机械设备', '经济社会发展',
+    '一带一路', '共同富裕', '科技创新', '国际合作', '世界纪录',
+    '研究发现', '重要进展', '国家能源集团',
+]
+
+
+def _longest_non_generic_match(left, right):
+    """返回两标题间最长的、不包含通用词的公共子串长度（0 表示没有）。"""
+    matcher = SequenceMatcher(None, left, right)
+    best = 0
+    for block in matcher.get_matching_blocks():
+        size, candidate = block.size, block.size
+        while candidate >= 5:
+            fragment = left[block.a + (size - candidate):block.a + size]
+            if not any(generic in fragment for generic in GENERIC_SHARED_PHRASES):
+                best = max(best, candidate)
+                break
+            candidate -= 1
+    return best
+
+
 def _is_duplicate_candidate(a, b):
     if a.get('date') != b.get('date'):
         return False
@@ -262,7 +301,11 @@ def _is_duplicate_candidate(a, b):
     right_pairs = {right[i:i + 2] for i in range(len(right) - 1)}
     overlap = len(left_pairs & right_pairs) / len(left_pairs | right_pairs) if left_pairs and right_pairs else 0
     longest = SequenceMatcher(None, left, right).find_longest_match().size
-    return overlap >= 0.3 or longest >= 8
+    if overlap >= 0.3 or longest >= 8:
+        return True
+    # 同日标题共享一个 ≥5 字的罕见长词（如"丹尼索瓦人"），改写幅度再大
+    # 也大概率是同一事件的系列报道，列为候选交 LLM 仲裁。
+    return _longest_non_generic_match(left, right) >= 5
 
 
 def find_duplicate_candidate_groups(articles):
@@ -300,6 +343,7 @@ def llm_review_duplicate_candidates(articles, candidate_groups):
         prompt = (
             "判断以下疑似新闻是否报道同一具体事件。只有主体、对象、动作、核心数据和时间共同指向同一事实才可合并。"
             "同类型不等于同一事件；主体不同（例如不同人物逝世、不同机构发布）必须保留为独立事件。"
+            "同一天围绕同一对象/遗址/成果发布的系列报道（例如同一发现的各自切入报道、姊妹论文）视为同一事件，只保留一条。"
             "可拆成多个重复组；独立事件不要列入。只输出 JSON 对象，duplicate_groups 每项包含 indices、keep、reason。\n\n"
             + "\n".join(f"[{local}] {articles[global_i]['title']}" for local, global_i in enumerate(candidates))
             + '\n\nJSON格式：{"duplicate_groups":[{"indices":[0,1],"keep":0,"reason":"共同事实"}]}'
@@ -762,6 +806,22 @@ def score_signals_batch(articles):
     return results
 
 
+def _china_filter(articles):
+    """三分支涉华路由：强关键词直接放行；歧义词或中国域名交 LLM 复核；其余剔除。
+
+    返回 (保留列表, 淘汰数)。
+    """
+    china_pass = []
+    china_llm = []
+    for a in articles:
+        if is_china_related(a["title"]):
+            china_pass.append(a)
+        elif hits_china_ambiguous_keyword(a["title"]) or is_china_source(a["url"]):
+            china_llm.append(a)
+    llm_confirmed = llm_is_china_related_batch(china_llm) if china_llm else []
+    return china_pass + llm_confirmed, len(articles) - len(china_pass) - len(llm_confirmed)
+
+
 def build_classification_result(today):
     today_str = today.strftime("%Y-%m-%d")
     input_path = BASE_DIR / today_str / "0新闻_粗筛.md"
@@ -780,15 +840,7 @@ def build_classification_result(today):
         rescue_word_groups=(OUTLOOK_ACTION_WORDS, OUTLOOK_OBJECT_WORDS),
     )]
 
-    china_pass = []
-    china_llm = []
-    for a in articles:
-        if is_china_related(a["title"]):
-            china_pass.append(a)
-        elif is_china_source(a["url"]):
-            china_llm.append(a)
-    llm_confirmed = llm_is_china_related_batch(china_llm) if china_llm else []
-    articles = china_pass + llm_confirmed
+    articles, _dropped = _china_filter(articles)
 
     duplicate_candidates = find_duplicate_candidate_groups(articles)
     if duplicate_candidates:
