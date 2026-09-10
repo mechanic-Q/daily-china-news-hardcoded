@@ -125,6 +125,8 @@ def _postprocess_text(text, url=None):
                 text = func(text)
     text = html.unescape(text)
     text = re.sub(r'\[!--begin:htmlVideoCode--\].*?\[!--end:htmlVideoCode--\]', '', text, flags=re.S)
+    # 网页分页标记残留（如人民网"摄pagebreak"），会污染正文与去重信号
+    text = re.sub(r'\s*pagebreak\s*', '', text, flags=re.I)
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'\s{2,}', ' ', text).strip()
     parts = re.split(r'(?<=[。；])', text)
