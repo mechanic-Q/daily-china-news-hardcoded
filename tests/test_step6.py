@@ -204,3 +204,51 @@ class TestRunFailClosed(unittest.TestCase):
             )
             with self.assertRaises(SystemExit):
                 run(today, dry_run=False)
+
+
+class TestBlockedNewsFilter(unittest.TestCase):
+
+    def _write_input(self, workdir, blocks):
+        workdir.mkdir(parents=True, exist_ok=True)
+        (workdir / "1新闻_链接.md").write_text(
+            "# 2026-09-10 精选新闻\n\n## 🚀 科技\n\n" + blocks,
+            encoding="utf-8",
+        )
+
+    def test_run_drops_article_with_blocked_term_in_title_before_fetch(self):
+        today = datetime.date(2026, 9, 10)
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("step6.BASE_DIR", Path(tmp)), \
+             mock.patch("step6.fetch_and_extract", return_value=("安全正文内容", None)) as fetch:
+            workdir = Path(tmp) / "2026-09-10"
+            self._write_input(workdir, (
+                "### [人民日报] 习近平向全国教师致以节日祝贺\n"
+                "URL：https://example.com/bad\n"
+                "发布时间：2026-09-10\n\n"
+                "### [新华社] 科学家发布新模型\n"
+                "URL：https://example.com/safe\n"
+                "发布时间：2026-09-10\n"
+            ))
+            run(today, dry_run=False)
+            content = (workdir / "2新闻_已审核.md").read_text("utf-8")
+        self.assertNotIn("习近平", content)
+        self.assertNotIn("致以节日祝贺", content)
+        self.assertIn("科学家发布新模型", content)
+        self.assertEqual(fetch.call_count, 1)
+
+    def test_run_drops_article_with_blocked_term_in_body(self):
+        today = datetime.date(2026, 9, 10)
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("step6.BASE_DIR", Path(tmp)), \
+             mock.patch("step6.fetch_and_extract",
+                        return_value=("习近平在会议上发表重要讲话。", None)):
+            workdir = Path(tmp) / "2026-09-10"
+            self._write_input(workdir, (
+                "### [人民日报] 会议在京举行\n"
+                "URL：https://example.com/a\n"
+                "发布时间：2026-09-10\n"
+            ))
+            run(today, dry_run=False)
+            content = (workdir / "2新闻_已审核.md").read_text("utf-8")
+        self.assertNotIn("习近平", content)
+        self.assertNotIn("会议在京举行", content)

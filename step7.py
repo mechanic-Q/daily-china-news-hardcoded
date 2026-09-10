@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
-from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args
+from daily.common import BASE_DIR, COLUMN_ORDER, parse_common_args as parse_args, contains_blocked_term
 load_dotenv(Path(__file__).parent / '.env')
 
 STEP7_MAX_WORKERS = 1
@@ -227,6 +227,12 @@ def run(today, dry_run):
             if body.startswith("[正文提取失败:"):
                 print(f"\n❌ 检测到正文提取失败的条目，pipeline 终止: [{a2['src']}] {a1['title'][:40]}")
                 raise SystemExit(1)
+            # 涉敏感词条目整体剔除；必须在 rewrite_blocked_terms 之前判定，
+            # 否则标题里的敏感词已被改写洗掉，闸门形同虚设。
+            # 日志不回显敏感词标题，避免日志/快照留存该词。
+            if contains_blocked_term(a1["title"]) or contains_blocked_term(body):
+                print(f"  ⏭️ 剔除涉敏感词条目 [{a2['src']}]（标题已省略）")
+                continue
             try:
                 title = rewrite_blocked_terms(a1["title"])
             except UnsafeBlockedTermError as e:

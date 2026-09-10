@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from daily.common import BASE_DIR, parse_common_args as parse_args
+from daily.common import BASE_DIR, parse_common_args as parse_args, contains_blocked_term
 from daily.http import CHROMIUM, ssl_ctx, fetch_html_static, chromium_dom, _preprocess_html
 from trafilatura import extract as tf_extract
 
@@ -236,6 +236,11 @@ def run(today, dry_run):
             'published_at': m.group(4) or '未知',
         })
 
+    title_blocked = [a for a in articles if contains_blocked_term(a['title'])]
+    if title_blocked:
+        print(f"  ⏭️ 剔除 {len(title_blocked)} 条涉敏感词条目（标题，已省略）")
+        articles = [a for a in articles if not contains_blocked_term(a['title'])]
+
     print(f"共 {len(articles)} 条，提取正文中...\n")
 
     with ThreadPoolExecutor(max_workers=STEP6_MAX_WORKERS) as executor:
@@ -247,15 +252,21 @@ def run(today, dry_run):
 
     success = 0
     failures = []
+    kept = []
     for idx, a in enumerate(articles):
         body, err = results.get(idx, (None, "unknown"))
         a['body'] = body or err or "未知错误"
+        if body and contains_blocked_term(a['body']):
+            print(f"  ⏭️ 剔除涉敏感词条目（正文，已省略）: [{a['src']}]")
+            continue
         status = '✅' if body else '❌'
         print(f"  {status} [{a['src']}] {a['title'][:40]}... ({len(a['body'])}字)" if body else f"  {status} [{a['src']}] {a['title'][:40]}... ❌ {err}")
         if body:
             success += 1
         else:
             failures.append(f"[{a['src']}] {a['title'][:40]} — {err}")
+        kept.append(a)
+    articles = kept
 
     if failures:
         print(f"\n❌ 正文提取失败: {len(failures)} 条，pipeline 终止。")
