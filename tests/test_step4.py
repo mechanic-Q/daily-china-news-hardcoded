@@ -52,6 +52,38 @@ class TestIsChinaRelated(unittest.TestCase):
     def test_china_keyword_south_china_sea(self):
         self.assertTrue(is_china_related("南海局势"))
 
+    def test_cross_word_pair_hit_routes_to_llm_review(self):
+        # "击中"+"俄" 拼出子串 "中俄"，不再走关键词快通道，需 LLM 复核
+        title = "乌军称击中俄“埃森海军上将”号护卫舰"
+        self.assertFalse(is_china_related(title))
+        self.assertTrue(step4.hits_china_ambiguous_keyword(title))
+
+    def test_foreign_ministry_hit_routes_to_llm_review(self):
+        title = "俄国防部称拦截多架无人机"
+        self.assertFalse(is_china_related(title))
+        self.assertTrue(step4.hits_china_ambiguous_keyword(title))
+
+    def test_genuine_bilateral_ties_still_fast_pass(self):
+        self.assertTrue(is_china_related("两岸经贸交流持续深化"))
+
+    def test_ambiguous_hit_kept_when_llm_confirms(self):
+        articles = [
+            {"title": "中俄举行联合军演", "url": "https://ckxxapp.ckxx.net/a", "date": "2026-09-10"},
+            {"title": "俄国防部称拦截无人机", "url": "https://ckxxapp.ckxx.net/b", "date": "2026-09-10"},
+        ]
+        with mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: [arts[0]]):
+            kept, _ = step4._china_filter(articles)
+        self.assertEqual([a["title"] for a in kept], ["中俄举行联合军演"])
+
+    def test_ambiguous_hit_dropped_when_llm_rejects(self):
+        articles = [
+            {"title": "乌军称击中俄“埃森海军上将”号护卫舰", "url": "https://ckxxapp.ckxx.net/a", "date": "2026-09-10"},
+            {"title": "俄国防部称拦截无人机", "url": "https://ckxxapp.ckxx.net/b", "date": "2026-09-10"},
+        ]
+        with mock.patch("step4.llm_is_china_related_batch", return_value=[]):
+            kept, _ = step4._china_filter(articles)
+        self.assertEqual(kept, [])
+
 
 class TestIsChinaSource(unittest.TestCase):
 
@@ -263,6 +295,7 @@ class TestConditionalExclusion(unittest.TestCase):
             {"date": "2026-07-25", "title": "习近平出席G20峰会发言", "url": "https://www.news.cn/20260725/d.html"},
         ]
         with mock.patch("step4.parse_0", return_value=articles), \
+             mock.patch("step4.llm_is_china_related_batch", side_effect=lambda arts: arts), \
              mock.patch("step4.score_signals_batch", return_value=[
                  make_category_signals("⚡ 能源"),
                  make_category_signals("🎖️ 军事"),
@@ -481,6 +514,79 @@ class TestEventDedup(unittest.TestCase):
         ]
 
         self.assertEqual(step4.find_duplicate_candidate_groups(articles), [[0, 1]])
+
+    def test_shared_rare_long_word_marks_candidate(self):
+        # 2026-09-10 实况：同一发现的姊妹论文，bigram 0.19 / 最长公共子串 5 字，
+        # 旧阈值漏过；"丹尼索瓦人"≥5 字罕见长词应列为候选
+        articles = [
+            {
+                "date": "2026-09-10",
+                "title": "研究人员首次在中国西南地区发现丹尼索瓦人化石",
+                "url": "https://www.cas.cn/cm/202609/t20260910_5120061.shtml",
+            },
+            {
+                "date": "2026-09-10",
+                "title": "新研究揭示中国南方丹尼索瓦人生存图景",
+                "url": "https://www.cas.cn/cm/202609/t20260910_5120093.shtml",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [[0, 1]])
+
+    def test_shared_generic_phrase_not_marked_candidate(self):
+        # 两条独立新闻只共享通用词"新能源汽车"，不成为候选
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "新能源汽车出口量再创新高",
+                "url": "https://example.com/a",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "多地下架不合规新能源汽车充电桩",
+                "url": "https://example.com/b",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [])
+
+    def test_perovskite_result_unchanged_by_generic_guard(self):
+        # 现有钙钛矿用例：命中 8 字阈值在前，通用词表不干扰既有行为
+        articles = [
+            {
+                "date": "2026-07-14",
+                "title": "新型钙钛矿-有机叠层太阳能电池光电转换效率刷新世界纪录",
+                "url": "https://www.cas.cn/cm/202607/t20260714_5115479.shtml",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "超28%！钙钛矿-有机叠层太阳能电池效率破纪录",
+                "url": "https://www.cas.cn/cm/202607/t20260714_5115493.shtml",
+            },
+            {
+                "date": "2026-07-14",
+                "title": "钙钛矿太阳能电池产业化基地在江苏投产",
+                "url": "https://example.com/independent-event",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [[0, 1]])
+
+    def test_different_dates_never_candidates(self):
+        articles = [
+            {
+                "date": "2026-09-09",
+                "title": "云南蝙蝠洞发现丹尼索瓦人化石",
+                "url": "https://example.com/a",
+            },
+            {
+                "date": "2026-09-10",
+                "title": "云南蝙蝠洞发现丹尼索瓦人化石",
+                "url": "https://example.com/b",
+            },
+        ]
+
+        self.assertEqual(step4.find_duplicate_candidate_groups(articles), [])
 
     def test_finds_perovskite_same_event_with_different_urls(self):
         articles = [
@@ -797,6 +903,7 @@ class TestBodySignalG1(unittest.TestCase):
             "url": "https://www.people.com.cn/n1/2026/0725/c1001-456.html",
         }
         with mock.patch("step4.parse_0", return_value=[article]), \
+             mock.patch("step4.llm_is_china_related_batch", return_value=[]), \
              mock.patch("step4.call_llm") as mocked_llm, \
              mock.patch("step4._fetch_article_body") as mocked_fetch:
             _, _ = step4.build_classification_result(today)
@@ -875,6 +982,7 @@ class TestBatchE2E(unittest.TestCase):
         }
         raw = json.dumps([{"index": 0, **make_signals(9)}], ensure_ascii=False)
         with mock.patch('step4.parse_0', return_value=[article]), \
+             mock.patch('step4.llm_is_china_related_batch', side_effect=lambda arts: arts), \
              mock.patch('step4.call_llm', return_value=raw):
             classified, selected = build_classification_result(today)
         all_articles = [a for items in classified.values() for a in items]
@@ -893,6 +1001,7 @@ class TestBatchE2E(unittest.TestCase):
             "url": "https://www.people.com.cn/n1/2026/0704/c1001-123.html",
         }
         with mock.patch('step4.parse_0', return_value=[article]), \
+             mock.patch('step4.llm_is_china_related_batch', side_effect=lambda arts: arts), \
              mock.patch('step4.score_signals_batch', return_value=[None]), \
              mock.patch('step4.score_signals', return_value=make_signals(8)):
             classified, selected = build_classification_result(today)
