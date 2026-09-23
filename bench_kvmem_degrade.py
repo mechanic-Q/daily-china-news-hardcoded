@@ -182,13 +182,15 @@ def run_probe(port: int, n_turns: int, api_key: str, log_path: Path,
             print(f"  turn {i}: ❌ {type(e).__name__} after {wall_s:.1f}s")
             results.append({"seq": i, "error": type(e).__name__, "wall_s": round(wall_s, 2)})
             continue
-        # 服务端刚记完最后一轮，稍等日志落盘再读
+        # 服务端刚记完最后一轮，稍等日志落盘再读。
+        # 注意口径一致: base_offset 是 raw 轮数, 这里也必须用 raw 列表比对索引,
+        # 再单独对目标轮做 valid 过滤（valid 过滤会跳过伪影轮, 索引错位）
         deadline = time.time() + 5
         tps = None
         while time.time() < deadline:
-            turns = valid_probe_turns(parse_chat_turns(_read_log_tail(log_path)))
-            if len(turns) >= base_offset + i:
-                tps = turns[base_offset + i - 1]["tps"]
+            raw_turns = parse_chat_turns(_read_log_tail(log_path))
+            if len(raw_turns) >= base_offset + i:
+                tps = raw_turns[base_offset + i - 1]["tps"]
                 break
             time.sleep(0.2)
         results.append({"seq": i, "tps": tps, "wall_s": round(wall_s, 2)})
