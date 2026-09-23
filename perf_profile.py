@@ -10,6 +10,9 @@ from pathlib import Path
 from daily.common import BASE_DIR
 STEPS = ["step1_3.py", "step4.py", "step6.py", "step7.py", "step8.py"]
 
+# issue #58: step4 历史 5-8min（旧栈 27B 串行 LLM 调用），300s 必被 TIMEOUT 杀掉
+STEP_TIMEOUT_S = 1800
+
 def parse_args():
     dry = "--dry-run" in sys.argv
     date_str = None
@@ -85,7 +88,7 @@ def run_profiler(today, date_str, dry_run, output_dir):
 
         try:
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300
+                cmd, capture_output=True, text=True, timeout=STEP_TIMEOUT_S
             )
             exit_code = proc.returncode
             stdout_tail = tail_text(proc.stdout)

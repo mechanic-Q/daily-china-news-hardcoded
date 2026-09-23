@@ -35,6 +35,10 @@ class TestRunAllInterpreter(unittest.TestCase):
             python.chmod(0o755)
             for step in ("step1_3.py", "step4.py", "step6.py", "step7.py", "step8.py"):
                 (root / step).write_text("", encoding="utf-8")
+            # resolve_llm_provider 读 llm.yaml 定端口（编排层用系统 python3 + PyYAML）
+            (root / "llm.yaml").write_bytes(
+                (Path(__file__).resolve().parent.parent / "llm.yaml").read_bytes()
+            )
 
             result = subprocess.run(
                 ["bash", str(root / "run_all.sh"), "--date", "2026-07-18", "--dry-run"],
