@@ -112,6 +112,26 @@ class TestLLMErrorHandling(unittest.TestCase):
                 call_llm("test-site", [{"role": "user", "content": "test"}])
             self.assertIn("length", str(ctx.exception))
 
+    def test_empty_content_falls_back_to_reasoning_content(self):
+        """issue #56 冒烟③: content 空但 reasoning_content 有值时回退取思维链。"""
+        mock_message = mock.MagicMock()
+        mock_message.content = ""
+        mock_message.reasoning_content = "这是思维链正文"
+
+        mock_choice = mock.MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+
+        mock_resp = mock.MagicMock()
+        mock_resp.choices = [mock_choice]
+
+        with mock.patch('llm_client.get_client') as mock_get:
+            mock_client = mock.MagicMock()
+            mock_get.return_value = (mock_client, "test-model", {})
+            mock_client.chat.completions.create.return_value = mock_resp
+            result = call_llm("test-site", [{"role": "user", "content": "test"}])
+            self.assertEqual(result, "这是思维链正文")
+
 
 if __name__ == "__main__":
     unittest.main()

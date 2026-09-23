@@ -55,7 +55,7 @@ step8.py    (渲染成报)   ->  HTML + PNG
 | 中核集团 cnnc.com.cn -> cnnpn.cn | chromium + 三级回退链 |
 | 人民日报 paper.people.com.cn | `node_NN.html` 扫描 1-9 |
 
-## LLM 调用点（共 3 处）
+## LLM 调用点（共 6 处）
 
 全部通过 `openai` SDK + 自定义 `base_url` 调用 OpenAI 兼容 API，统一由 `llm_client.py` 管理。
 
@@ -64,15 +64,21 @@ step8.py    (渲染成报)   ->  HTML + PNG
 - **唯一配置**：`llm.yaml` - 改一行即可切换 provider/model
 - **抽象层**：`llm_client.py` - `get_client(call_site_id)` 返回 (OpenAI 实例, model, kwargs)；`call_llm(call_site_id, messages)` 一站式调用
 - **切换 provider**：改 `llm.yaml` 顶层 `provider: <name>` + `model: <string>` 即可，不用改代码
+- **本地后端**：`kvmem`（KVMem rc1 + IQ2_S @ 27182，`bash start-llm.sh kvmem` 启动，见 ADR-0004）；回滚旧栈 = provider 一行改回 `qwen-local` + `bash start-llm.sh`（8899）。两后端与视频侧 8888/18200/18201 显存互斥
 - **环境变量**：`.env` 中 `LLAMA_API_KEY`（本地 Qwen3.8-27B）+ `ZHIPU_API_KEY` / `MINIMAX_API_KEY`（应急备用）
 
 ### 调用点总览
 
-| call_site_id | 位置 | 用途 | 关键参数 |
-|---|---|---|---|
-| `china-relevance` | `step4.py:llm_is_china_related()` | 涉华判定兜底 | temp=0.7, max_tokens=10, timeout=15s |
-| `column-classify` | `step4.py:llm_classify_single()` | 8 栏目分类仲裁 | temp=0.7, max_tokens=10, timeout=15s |
-| `summarize` | `step7.py:llm_summarize()` | 新闻摘要生成 | temp=0.7, max_tokens=300, timeout=30s, 智能重试×3 |
+温度 / max_tokens / timeout 以 `llm.yaml` 的 `call_sites` 为唯一真源。
+
+| call_site_id | 位置 | 用途 |
+|---|---|---|
+| `china-relevance` | `step4.py:llm_is_china_related()` | 涉华判定兜底 |
+| `column-classify` | `step4.py:llm_classify_single()` | 8 栏目分类仲裁 |
+| `column-score` | `step4.py:score_signals()` | 栏目新闻价值评分 |
+| `event-dedup` | `step4.py:llm_review_duplicate_candidates()` | 跨信源同事件去重 |
+| `summarize` | `step7.py:llm_summarize()` | 新闻摘要生成 |
+| `monthly-overview` | `monthly_report.py` | 月度报告综述 |
 
 ### 旧 provider 切回
 
