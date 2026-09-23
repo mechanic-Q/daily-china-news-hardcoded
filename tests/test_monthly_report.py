@@ -133,8 +133,11 @@ class TestGrounding(unittest.TestCase):
             self.assertIsNone(result)
 
     def test_llm_returns_none_on_exception(self):
-        with mock.patch.dict(os.environ, {"ZHIPU_API_KEY": "fake"}):
-            with mock.patch("openai.OpenAI") as mock_client:
+        # patch 目标必须是 llm_client 命名空间里的引用: llm_client.py 用
+        # `from openai import OpenAI` 拷贝了类引用, patch "openai.OpenAI" 不生效,
+        # 会真实联网调用在跑的后端 (issue #56 冒烟时暴露)。
+        with mock.patch.dict(os.environ, {"LLAMA_API_KEY": "fake"}):
+            with mock.patch("llm_client.OpenAI") as mock_client:
                 mock_client.side_effect = Exception("mock fail")
                 result = llm_monthly_overview(("sys", "user"), 1)
                 self.assertIsNone(result)

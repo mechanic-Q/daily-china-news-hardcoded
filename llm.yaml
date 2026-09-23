@@ -24,11 +24,18 @@ call_sites:
     temperature: 0.7
     timeout: 30
 model: qwen3.8
-provider: qwen-local
+provider: kvmem
 providers:
   qwen-local:
     api_key_env: LLAMA_API_KEY
     base_url: http://localhost:8899/v1
+    max_output_tokens: 16384
+    reasoning: "off"
+  # KVMem rc1 + IQ2_S @ 冷门端口 27182（bash start-llm.sh kvmem 启动；与 8888/8899/18200/18201 显存互斥）
+  # 思维链双保险: 服务端 --no-think + 客户端 reasoning_effort=none（rc1 实测接受该字段, 冒烟 2026-09-24）
+  kvmem:
+    api_key_env: LLAMA_API_KEY
+    base_url: http://127.0.0.1:27182/v1
     max_output_tokens: 16384
     reasoning: "off"
   minimax:
