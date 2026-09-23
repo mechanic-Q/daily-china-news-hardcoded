@@ -35,10 +35,13 @@ class TestRunAllInterpreter(unittest.TestCase):
             python.chmod(0o755)
             for step in ("step1_3.py", "step4.py", "step6.py", "step7.py", "step8.py"):
                 (root / step).write_text("", encoding="utf-8")
-            # resolve_llm_provider 读 llm.yaml 定端口（编排层用系统 python3 + PyYAML）
-            (root / "llm.yaml").write_bytes(
-                (Path(__file__).resolve().parent.parent / "llm.yaml").read_bytes()
-            )
+            # resolve_llm_provider 读 llm.yaml 定端口（编排层用系统 python3 + PyYAML）。
+            # 用保留测试端口段 (p:9) 的变体, 沙箱结果不依赖宿主机真实 LLM 实例状态:
+            # 9xx 段无服务在线 → 走"找不到 start-llm.sh, 跳过启动"分支, 确定性通过
+            sandbox_yaml = (Path(__file__).resolve().parent.parent / "llm.yaml").read_text(
+                encoding="utf-8")
+            sandbox_yaml = sandbox_yaml.replace("127.0.0.1:27182", "127.0.0.1:9999")
+            (root / "llm.yaml").write_text(sandbox_yaml, encoding="utf-8")
 
             result = subprocess.run(
                 ["bash", str(root / "run_all.sh"), "--date", "2026-07-18", "--dry-run"],

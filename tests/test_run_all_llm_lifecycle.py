@@ -39,11 +39,22 @@ class TestRunAllLlmLifecycle(unittest.TestCase):
     def test_reused_instance_is_not_killed_on_exit(self):
         # 所有权语义：端口已在线实例 → 复用但退出不杀（2026-09-24 误杀生产实例教训）
         self.assertIn("复用，退出时不关闭", self.source)
-        self.assertIn("LLM_PID=\"\"", self.source)
+        # 机制断言：复用分支显式清空 LLM_PID（注释尾随, 区别于顶部初始化行）
+        self.assertIn('LLM_PID=""   # 非自家启动, 退出时不杀', self.source)
+
+    def test_kvmem_reads_real_pid_after_ready(self):
+        # P0 修复锁定：kvmem 包装进程自检后退出, 就绪后必须回读端口真实 pid
+        self.assertIn("LLM_PID=$(port_pids | head -n1)", self.source)
 
     def test_foreign_port_conflict_refuses_to_start(self):
         # 互斥端口被占 → 拒绝启动报错，绝不替用户杀进程
         self.assertIn("16G 显存互斥", self.source)
+        # 互斥检查匹配任意绑定地址（0.0.0.0 旧栈不能漏检）
+        self.assertIn('":(8888|8899|18200|18201) "', self.source)
+
+    def test_occupied_port_without_health_fails_closed(self):
+        # 端口被占但健康未过 → 报错退出（可能是用户正在手动启动）, 不代杀
+        self.assertIn("但服务未就绪", self.source)
 
     def test_stop_lifecycle_still_present(self):
         # 用完必关的契约不变（仅针对自家启动实例）

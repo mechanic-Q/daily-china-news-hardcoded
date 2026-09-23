@@ -79,37 +79,40 @@ def valid_probe_turns(turns: list[dict]) -> list[dict]:
 
 
 def judge_deterioration(turns: list[dict], min_turns: int = MIN_PROBE_TURNS) -> dict:
-    """劣化判定：有效轮里连续 DETERIORATE_CONSECUTIVE 轮 t/s < DETERIORATE_TPS。"""
+    """劣化判定：有效轮里连续 DETERIORATE_CONSECUTIVE 轮 t/s < DETERIORATE_TPS。
+
+    返回 dict 两分支 schema 一致（deteriorated 分支多 consecutive_slow）。
+    """
     valid = valid_probe_turns(turns)
     tps_seq = [t["tps"] for t in valid]
     consecutive = 0
     first_bad_seq = None
+    base = {
+        "first_bad_seq": None,
+        "min_tps": min(tps_seq) if tps_seq else None,
+        "median_tps": statistics.median(tps_seq) if tps_seq else None,
+        "n_valid": len(valid),
+        "n_total": len(turns),
+        "consecutive_slow": 0,
+        "insufficient": len(valid) < min_turns,
+    }
     for t in valid:
         if t["tps"] < DETERIORATE_TPS:
             consecutive += 1
             if consecutive == 1:
                 first_bad_seq = t["seq"]
             if consecutive >= DETERIORATE_CONSECUTIVE:
-                return {
+                base.update({
                     "deteriorated": True,
                     "first_bad_seq": first_bad_seq,
-                    "min_tps": min(tps_seq),
-                    "n_valid": len(valid),
                     "consecutive_slow": consecutive,
                     "insufficient": False,
-                }
+                })
+                return base
         else:
             consecutive = 0
-    return {
-        "deteriorated": False,
-        "first_bad_seq": None,
-        "min_tps": min(tps_seq) if tps_seq else None,
-        "median_tps": statistics.median(tps_seq) if tps_seq else None,
-        "n_valid": len(valid),
-        "n_total": len(turns),
-        "consecutive_slow": consecutive,
-        "insufficient": len(valid) < min_turns,
-    }
+    base["deteriorated"] = False
+    return base
 
 
 # ── Daily 风格负载（贴近 6 个 call_site 的真实 prompt 形态）──
@@ -187,17 +190,21 @@ def run_probe(port: int, n_turns: int, api_key: str, log_path: Path,
         # 再单独对目标轮做 valid 过滤（valid 过滤会跳过伪影轮, 索引错位）
         deadline = time.time() + 5
         tps = None
+        n_gen = None
         while time.time() < deadline:
             raw_turns = parse_chat_turns(_read_log_tail(log_path))
             if len(raw_turns) >= base_offset + i:
-                tps = raw_turns[base_offset + i - 1]["tps"]
+                turn = raw_turns[base_offset + i - 1]
+                tps = turn["tps"]
+                n_gen = turn.get("n_gen")
                 break
             time.sleep(0.2)
-        results.append({"seq": i, "tps": tps, "wall_s": round(wall_s, 2)})
-        print(f"  turn {i}: tps={tps if tps is not None else '?'}  wall={wall_s:.2f}s")
+        results.append({"seq": i, "tps": tps, "n_gen": n_gen, "wall_s": round(wall_s, 2)})
+        print(f"  turn {i}: tps={tps if tps is not None else '?'}  n_gen={n_gen}  wall={wall_s:.2f}s")
         time.sleep(turn_pause_s)
 
-    probe_turns = [{"seq": r["seq"], "n_gen": MIN_VALID_N_GEN, "tps": r["tps"]}
+    # 判定用真实 n_gen 过滤伪影轮（n_gen<8 是 MTP 固定开销, 不入曲线）
+    probe_turns = [{"seq": r["seq"], "n_gen": r.get("n_gen") or 0, "tps": r["tps"]}
                    for r in results if r.get("tps") is not None]
     verdict = judge_deterioration(probe_turns)
     report = {"port": port, "n_turns": n_turns, "results": results, "verdict": verdict}

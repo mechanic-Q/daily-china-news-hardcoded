@@ -94,10 +94,11 @@ port_pids() {
         '$1=="LISTEN" && $4~p { for(i=1;i<=NF;i++) if($i~/pid=/) { sub(/.*pid=/,"",$i); sub(/,.*/,"",$i); print $i } }'
 }
 
-# 16G 卡互斥: 其它本地 LLM 端口被占 (非自家端口) 则拒绝双开
-# 注意: set -e 下 grep 无结果返回 1, 必须 || true 兜底
+# 16G 卡互斥: 其它本地 LLM 端口被占 (非自家端口) 则拒绝双开。
+# 口径与 start-llm.sh 一致: 匹配任意绑定地址 (0.0.0.0/[::]/127.0.0.1),
+# 只认端口后跟空格, 不会误匹配 182001 之类。set -e 下 grep 无结果返回 1, || true 兜底。
 foreign_llm_port_pids() {
-    ss -tlnp 2>/dev/null | grep -E "127\.0\.0\.1:(8888|8899|18200|18201) " | \
+    ss -tlnp 2>/dev/null | grep -E ":(8888|8899|18200|18201) " | \
         grep -oE 'pid=[0-9]+' | cut -d= -f2 || true
 }
 
@@ -120,9 +121,11 @@ start_llm_server() {
         exit 1
     fi
     if [[ -n "$existing" ]]; then
-        echo "  [LLM] 端口 $LLM_SERVER_PORT 被异常进程占用, 先清理: $existing"
-        kill "$existing" 2>/dev/null || true
-        sleep 1
+        # 目标端口被占但健康检查未过: 可能是用户正在手动启动 (模型加载中 30-60s)。
+        # 分不清自家残留与用户进程 → 报错退出, 不替用户杀 (与所有权语义一致)
+        echo "错误: 端口 $LLM_SERVER_PORT 被占用 (pid=$existing) 但服务未就绪。" >&2
+        echo "      若是自家残留请手动清理 (kill $existing) 后重跑; 若是用户正在启动请等待。" >&2
+        exit 1
     fi
     if [[ ! -f "$LLM_SERVER_SCRIPT" ]]; then
         echo "  [LLM] ⚠ 找不到 $LLM_SERVER_SCRIPT，跳过自动启动（需手动启动 LLM 服务）"
@@ -138,12 +141,15 @@ start_llm_server() {
     LLM_PID=$!
     for i in $(seq 1 90); do
         if llm_server_up; then
+            # LLM_PID 是 start-llm.sh 包装进程 (kvmem 分支自检后 exit 0, 包装先行退出),
+            # 杀它会漏掉真正的服务进程 —— 就绪后必须回读端口上真实监听的 pid
+            LLM_PID=$(port_pids | head -n1)
             echo "  [LLM] 就绪 (pid=$LLM_PID)"
             return 0
         fi
         sleep 2
     done
-    echo "错误: LLM 服务 180s 内未就绪，日志: /tmp/daily-llm-server.log" >&2
+    echo "错误: LLM 服务 180s 内未就绪，日志: /tmp/daily-llm-server.log (+kvmem 另见 /tmp/kvmem-daily.log)" >&2
     stop_llm_server
     exit 1
 }

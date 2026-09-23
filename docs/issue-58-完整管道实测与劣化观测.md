@@ -18,7 +18,7 @@
 
 **生产全管道**：`./run_all.sh --date 2026-09-24`（当日 05:00 真实跑）。
 **冻结输入重负载**：`bench_ab.py` 沙箱（09-23 冻结输入，`0新闻_粗筛.md` 69 条 + `2新闻_已审核.md` top10 正文），双后端各跑 step4+step7；`perf_profile.py` 以 `DAILY_OUTPUT_DIR` 沙箱 + `--dry-run` 跑全步骤。
-**劣化探针**：`bench_kvmem_degrade.py`（本次新增，含 10 例单测）——解析服务端日志 `KVMEM_CHAT_TURN` 的 `gen_toks`（= n_gen/gen_ms×1000，KVMem 响应体无 timings 字段），加上 30 轮 Daily 风格合成负载（china-relevance/column-score JSON 短输出 + summarize 中等输出）。
+**劣化探针**：`bench_kvmem_degrade.py`（本次新增，含 9 例单测）——解析服务端日志 `KVMEM_CHAT_TURN` 的 `gen_toks`（= n_gen/gen_ms×1000，KVMem 响应体无 timings 字段），加上 30 轮 Daily 风格合成负载（china-relevance/column-score JSON 短输出 + summarize 中等输出）。
 
 ## 2. 全步骤 perf 报告
 
@@ -87,10 +87,10 @@
 
 | 轮段 | 载荷 | t/s 范围 | 说明 |
 |---|---|---|---|
-| seq 1-8 | 启动自检/冒烟 | 82.5-102.3 | 256-token 生成 |
+| seq 1-8 | 修后重启自检/冒烟 | 50.1-84.3 | 256-token 生成与探针模板轮 |
 | seq 9-35 | 生产管道 + kvmem leg（step4 全套 26 次 LLM 调用含 n_gen=3053 截断轮 + step7） | 34.5-92.5 | 有效轮 min 34.5（n_gen=10 边界轮），中长输出稳定 87-92 |
-| seq 36-67 | 30 轮标准探针（Daily 风格负载 3 模板轮换） | 55.6-97.7 | 无下滑趋势，中位 81.7 |
-| seq 68-97 | 第二轮探针 + 恢复后自检 | 56.0-87.2 | 无下滑趋势 |
+| seq 36-67 | 30 轮标准探针（Daily 风格负载 3 模板轮换） | 54.5-90.7 | 无下滑趋势 |
+| seq 68-97 | 第二轮探针 + 恢复后自检 | 55.6-97.7 | 无下滑趋势，中位 81.7 |
 
 **判定标准**：有效轮（n_gen≥8，排除单 token MTP 固定开销伪影）连续 3 轮 <30 t/s。
 
@@ -101,8 +101,8 @@
 ## 5. run_all.sh 决定：不加自动重启；修复了更前置的生命周期缺陷
 
 - **不加 step4/step7 间自动重启**（每次 +25s）：前提"证实劣化"不成立（§4），97 轮实测无劣化迹象，重启纯属浪费。保留观测能力：后续任何怀疑劣化的时刻，`python3 bench_kvmem_degrade.py parse --log /tmp/kvmem-daily.log` 即可复检（判定逻辑已固化+单测覆盖）。
-- **本次实际修复**（跑管道的前置条件）：run_all.sh 的 LLM 生命周期仍硬编码 `8899`（旧栈），而 `llm.yaml` 已 `provider: kvmem`@27182——直接跑会在 16G 卡同时拉起两个 27B 实例（OOM）。已改为从 `llm.yaml` 解析 provider/base_url：kvmem→`start-llm.sh kvmem`，qwen-local→vanilla，云 provider 跳过本地启停；互斥端口被占拒绝启动（与 start-llm.sh 契约一致）。
-- **所有权语义**（测试中误杀生产实例的教训固化）：自启动实例退出时关闭（用完必关不变）；端口已在线实例复用但退出**不杀**（可能是用户手动启动）；互斥端口被外部占用**报错拒绝**，绝不替用户杀进程。
+- **本次实际修复**（跑管道的前置条件）：run_all.sh 的 LLM 生命周期仍硬编码 `8899`（旧栈），而 `llm.yaml` 已 `provider: kvmem`@27182——直接跑会在 16G 卡同时拉起两个 27B 实例（OOM）。已改为从 `llm.yaml` 解析 provider/base_url：kvmem→`start-llm.sh kvmem`，qwen-local→vanilla，云 provider 跳过本地启停；互斥端口被占拒绝启动（与 start-llm.sh 契约一致，任意绑定地址口径）。
+- **所有权语义**（测试中误杀生产实例的教训固化）：自启动实例退出时关闭（用完必关不变；就绪后回读端口真实 pid——kvmem 的 bash 包装进程自检后先退，只杀包装会泄漏服务进程）；端口已在线实例复用但退出**不杀**（可能是用户手动启动）；互斥端口被外部占用**报错拒绝**，绝不替用户杀进程；目标端口被占但健康未过同样报错退出（可能是用户正在启动、模型加载中）。
 
 ## 6. KVMem 去留分析（加速比未达标为何仍维持）
 
@@ -119,7 +119,7 @@
 | `/mnt/e/每日新中国/2026-09-24/perf/2026-09-23-profile.{json,md}` | 冻结输入重负载全步骤报告 |
 | `/mnt/e/每日新中国/2026-09-24/perf/kvmem-degrade-curve.json` | 97 轮序号→t/s 曲线 + 判定 |
 | `/mnt/e/每日新中国/2026-09-24/perf/kvmem-degrade-probe30.json` | 30 轮标准探针逐轮数据 |
-| `bench_kvmem_degrade.py` + `tests/test_bench_kvmem_degrade.py` | 劣化探针（parse/probe/judge 三模式，10 例单测） |
+| `bench_kvmem_degrade.py` + `tests/test_bench_kvmem_degrade.py` | 劣化探针（parse/probe/judge 三模式，9 例单测） |
 | `run_all.sh` + `tests/test_run_all_llm_lifecycle.py` | 生命周期跟随 provider + 所有权语义（7 例静态断言） |
 | `docs/kvmem-daily-snapshot-20260924-pre58.log` | 实验前 8 轮日志快照（服务重启截断前的基线证据） |
 | `/tmp/daily_bench_ab_58/` | 双 leg 完整日志与产物快照 |
