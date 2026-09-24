@@ -38,13 +38,54 @@ if [[ ! -x "$PYTHON" ]]; then
     exit 1
 fi
 
-# --- 本地 LLM 服务生命周期 (Qwen3.8-27B @ localhost:8899, 专属端口, 用完必关) ---
+# --- 本地 LLM 服务生命周期 (provider 由 llm.yaml 决定, 端口从 base_url 解析) ---
+# issue #58: provider: kvmem → start-llm.sh kvmem @ 27182; qwen-local → 8899;
+# 云 provider (zhipu/minimax) 无本地实例, 跳过启停。16G 卡互斥见 ADR-0004。
+# 所有权语义 (2026-09-24 沙箱测试误杀生产实例的教训):
+#   - 自启动的实例 → trap 退出时关闭 (用完必关)
+#   - 端口上已在线的实例 → 复用但退出时**不杀** (可能是用户/上游手动启动)
+#   - 互斥端口被外部占用 → 拒绝启动报错退出 (与 start-llm.sh 一致), 绝不替用户杀
 LLM_SERVER_SCRIPT="$SCRIPT_DIR/start-llm.sh"
-LLM_SERVER_PORT=8899
 LLM_PID=""
 
+_llm_provider_base_url() {
+    python3 - "$SCRIPT_DIR/llm.yaml" <<'PYEOF'
+import sys, yaml
+cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+prov = cfg["providers"][cfg["provider"]]
+print(prov["base_url"])
+PYEOF
+}
+
+_llm_provider_name() {
+    python3 - "$SCRIPT_DIR/llm.yaml" <<'PYEOF'
+import sys, yaml
+print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["provider"])
+PYEOF
+}
+
+LLM_PROVIDER=""
+LLM_SERVER_PORT=""
+
+resolve_llm_provider() {
+    LLM_PROVIDER=$(_llm_provider_name) || { echo "错误: 无法解析 llm.yaml provider" >&2; exit 1; }
+    local base_url
+    base_url=$(_llm_provider_base_url) || { echo "错误: 无法解析 llm.yaml base_url" >&2; exit 1; }
+    case "$base_url" in
+        http://127.0.0.1:*|http://localhost:*)
+            local port="${base_url##*:}"
+            LLM_SERVER_PORT="${port%%/*}"
+            ;;
+        *)
+            # 云 provider: 无本地实例可管
+            LLM_SERVER_PORT=""
+            ;;
+    esac
+    echo "  [LLM] provider=$LLM_PROVIDER base_url=$base_url"
+}
+
 llm_server_up() {
-    curl -sf -m 2 "http://localhost:$LLM_SERVER_PORT/v1/models" >/dev/null 2>&1
+    curl -sf -m 2 "http://127.0.0.1:$LLM_SERVER_PORT/v1/models" >/dev/null 2>&1
 }
 
 # 提取本专属端口上实际监听的 llama-server PID (很可能只有自家残留)
@@ -53,57 +94,82 @@ port_pids() {
         '$1=="LISTEN" && $4~p { for(i=1;i<=NF;i++) if($i~/pid=/) { sub(/.*pid=/,"",$i); sub(/,.*/,"",$i); print $i } }'
 }
 
+# 16G 卡互斥: 其它本地 LLM 端口被占 (非自家端口) 则拒绝双开。
+# 口径与 start-llm.sh 一致: 匹配任意绑定地址 (0.0.0.0/[::]/127.0.0.1),
+# 只认端口后跟空格, 不会误匹配 182001 之类。set -e 下 grep 无结果返回 1, || true 兜底。
+foreign_llm_port_pids() {
+    ss -tlnp 2>/dev/null | grep -E ":(8888|8899|18200|18201) " | \
+        grep -oE 'pid=[0-9]+' | cut -d= -f2 || true
+}
+
 start_llm_server() {
-    local existing
-    existing=$(port_pids | head -n1)
-    if [[ -n "$existing" ]] && llm_server_up; then
-        LLM_PID="$existing"   # 复用自家残留, 用完同样关闭
-        echo "  [LLM] 服务已在运行 (pid=$LLM_PID)"
+    if [[ -z "$LLM_SERVER_PORT" ]]; then
+        echo "  [LLM] provider=$LLM_PROVIDER 为云端 API，跳过本地服务启停"
         return 0
     fi
+    local existing foreign
+    existing=$(port_pids | head -n1)
+    if [[ -n "$existing" ]] && llm_server_up; then
+        echo "  [LLM] 端口 $LLM_SERVER_PORT 已有实例在线 (pid=$existing)，复用，退出时不关闭"
+        LLM_PID=""   # 非自家启动, 退出时不杀
+        return 0
+    fi
+    foreign=$(foreign_llm_port_pids)
+    if [[ -n "$foreign" ]]; then
+        echo "错误: 16G 显存互斥: 本地 LLM 端口 8888/8899/18200/18201 被占用 (pid=$foreign)。" >&2
+        echo "      双实例必 OOM；请先停对方或改 llm.yaml provider。" >&2
+        exit 1
+    fi
     if [[ -n "$existing" ]]; then
-        echo "  [LLM] 端口 $LLM_SERVER_PORT 被异常进程占用, 先清理: $existing"
-        kill "$existing" 2>/dev/null || true
-        sleep 1
+        # 目标端口被占但健康检查未过: 可能是用户正在手动启动 (模型加载中 30-60s)。
+        # 分不清自家残留与用户进程 → 报错退出, 不替用户杀 (与所有权语义一致)
+        echo "错误: 端口 $LLM_SERVER_PORT 被占用 (pid=$existing) 但服务未就绪。" >&2
+        echo "      若是自家残留请手动清理 (kill $existing) 后重跑; 若是用户正在启动请等待。" >&2
+        exit 1
     fi
     if [[ ! -f "$LLM_SERVER_SCRIPT" ]]; then
         echo "  [LLM] ⚠ 找不到 $LLM_SERVER_SCRIPT，跳过自动启动（需手动启动 LLM 服务）"
         return 0
     fi
-    echo "  [LLM] 启动 Qwen3.8-27B 服务..."
-    nohup bash "$LLM_SERVER_SCRIPT" > /tmp/daily-llm-server.log 2>&1 &
+    local mode=""
+    case "$LLM_PROVIDER" in
+        kvmem) mode="kvmem" ;;
+        *) mode="" ;;
+    esac
+    echo "  [LLM] 启动 $LLM_PROVIDER 服务 (${mode:-vanilla})..."
+    nohup bash "$LLM_SERVER_SCRIPT" $mode > /tmp/daily-llm-server.log 2>&1 &
     LLM_PID=$!
     for i in $(seq 1 90); do
         if llm_server_up; then
+            # LLM_PID 是 start-llm.sh 包装进程 (kvmem 分支自检后 exit 0, 包装先行退出),
+            # 杀它会漏掉真正的服务进程 —— 就绪后必须回读端口上真实监听的 pid
+            LLM_PID=$(port_pids | head -n1)
             echo "  [LLM] 就绪 (pid=$LLM_PID)"
             return 0
         fi
         sleep 2
     done
-    echo "错误: LLM 服务 180s 内未就绪，日志: /tmp/daily-llm-server.log" >&2
+    echo "错误: LLM 服务 180s 内未就绪，日志: /tmp/daily-llm-server.log (+kvmem 另见 /tmp/kvmem-daily.log)" >&2
     stop_llm_server
     exit 1
 }
 
 stop_llm_server() {
-    local pids unique=""
-    pids=$(port_pids)
-    for p in $LLM_PID $pids; do
-        [[ " $unique " == *" $p "* ]] && continue
-        unique="$unique $p"
-        echo "  [LLM] 停止服务 (pid=$p)..."
-        kill "$p" 2>/dev/null || true
-    done
-    if [[ -n "$unique" ]]; then
-        sleep 1
-        for p in $unique; do
-            kill -9 "$p" 2>/dev/null || true
-        done
-        LLM_PID=""
+    # 只关自家启动的实例 (LLM_PID 非空); 复用的外部实例不动
+    if [[ -z "$LLM_PID" ]]; then
+        return 0
     fi
+    echo "  [LLM] 停止自家实例 (pid=$LLM_PID)..."
+    kill "$LLM_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$LLM_PID" 2>/dev/null || true
+    LLM_PID=""
 }
 
 trap stop_llm_server EXIT INT TERM
+
+# 解析 provider/端口（在 trap 之后: resolve 失败 exit 时无需清理本地服务）
+resolve_llm_provider
 
 STEPS=("step1_3.py" "step4.py" "step6.py" "step7.py" "step8.py")
 
