@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from daily.common import BASE_DIR, COLUMN_ORDER, WEEKDAYS, parse_common_args as parse_args
+from daily.http import CHROMIUM
 
 try:
     from PIL import Image, ImageChops
@@ -378,9 +379,9 @@ def crop_bottom_whitespace(png_path):
 
 def screenshot_and_crop(html_path, png_path):
     file_url = html_path.resolve().as_uri()
-    chromium = "/snap/bin/chromium"
+    chromium = CHROMIUM
     if not Path(chromium).exists():
-        print("  ⚠ chromium not found at /snap/bin/chromium")
+        print(f"  ⚠ chromium not found at {CHROMIUM}")
         return False
 
     cmd = [

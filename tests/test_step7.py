@@ -1,5 +1,6 @@
 import sys
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -55,7 +56,7 @@ class TestPlaceholderDetection(unittest.TestCase):
 
 class TestParse2NewsMultilineBody(unittest.TestCase):
     def test_multiline_body_is_not_truncated(self):
-        tmp = Path("/tmp/2news_multiline.md")
+        tmp = Path(tempfile.gettempdir()) / "2news_multiline.md"
         tmp.write_text(
             "# 2026-09-02 新闻（已审核）\n\n"
             "## 【人民日报】一根玉米\n\n"
@@ -70,7 +71,7 @@ class TestParse2NewsMultilineBody(unittest.TestCase):
         tmp.unlink()
 
     def test_single_line_body_unchanged(self):
-        tmp = Path("/tmp/2news_single.md")
+        tmp = Path(tempfile.gettempdir()) / "2news_single.md"
         tmp.write_text(
             "# 2026-09-02 新闻（已审核）\n\n"
             "## 【新华社】智神星一号\n\n"

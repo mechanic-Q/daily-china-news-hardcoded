@@ -16,6 +16,7 @@ except ImportError:
     ImageChops = None
 
 from daily.common import BASE_DIR, COLUMN_ORDER, CST
+from daily.http import CHROMIUM
 from llm_client import call_llm, LLMCallError
 
 ARCHIVE_DIR = BASE_DIR / "archive"
@@ -393,9 +394,9 @@ def render_html(month, stats, picks, overview, health_stats=None):
 def render_png(html_path, png_path):
     try:
         subprocess.run(
-            ["/snap/bin/chromium", "--headless", "--no-sandbox",
+            [CHROMIUM, "--headless", "--no-sandbox",
              f"--screenshot={png_path}", "--window-size=1280,2000",
-             f"file://{html_path}"],
+             Path(html_path).resolve().as_uri()],   # Windows 下 f"file://{path}" 是坏 URI
             timeout=60, check=True,
         )
     except Exception:

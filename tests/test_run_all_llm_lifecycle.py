@@ -1,7 +1,9 @@
-"""run_all.sh LLM 服务生命周期跟随 llm.yaml provider 的静态测试（issue #58 T3）。
+"""run_all.sh LLM 服务生命周期跟随 llm.yaml provider 的静态测试（issue #62 重写）。
 
-run_all.sh 是 bash 编排脚本，无 Python 可导入面；本测试以文本断言锁定关键行为，
-防止 provider 切换后端口硬编码漂移（8899 旧栈 → kvmem 27182）。
+run_all.sh 是 bash 编排脚本，无 Python 可导入面；本测试以文本断言锁定关键行为：
+strata provider 启停、nvidia-smi 显存互斥、复用不杀所有权语义、taskkill 树杀。
+历史: 2026-09-24 起锁定 kvmem 27182 + ss 端口清单（issue #58 T3）；
+2026-10-12 随 Windows 原生化重写（ADR-0005）。
 """
 
 import unittest
@@ -26,31 +28,41 @@ class TestRunAllLlmLifecycle(unittest.TestCase):
         self.assertIn("base_url", self.source)
         self.assertIn("local", self.source.lower())
 
-    def test_kvmem_start_mode_passed_to_start_llm(self):
-        # kvmem provider 走 start-llm.sh kvmem 分支
+    def test_strata_start_script_invoked(self):
+        # strata provider 走 start-llm.sh 启动
         self.assertIn("start-llm.sh", self.source)
-        self.assertIn("kvmem", self.source)
 
-    def test_memory_mutex_check_covers_known_ports(self):
-        # 16G 卡互斥清单：本地 provider 启动前须检查其它本地 LLM 端口占用
-        for port in ("8888", "8899", "18200", "18201"):
-            self.assertIn(port, self.source)
+    def test_vram_mutex_check_replaces_port_list(self):
+        # 16G 卡互斥改为 nvidia-smi 显存阈值（WSL 侧 CUDA 负载同样可见, ADR-0005）；
+        # 旧互斥端口清单不得残留
+        self.assertIn("nvidia-smi", self.source)
+        self.assertIn("显存互斥", self.source)
+        self.assertNotIn("18201", self.source)
 
     def test_reused_instance_is_not_killed_on_exit(self):
         # 所有权语义：端口已在线实例 → 复用但退出不杀（2026-09-24 误杀生产实例教训）
         self.assertIn("复用，退出时不关闭", self.source)
-        # 机制断言：复用分支显式清空 LLM_PID（注释尾随, 区别于顶部初始化行）
-        self.assertIn('LLM_PID=""   # 非自家启动, 退出时不杀', self.source)
+        # 机制断言：复用分支显式清空 LLM_OWNED（注释尾随, 区别于顶部初始化行）
+        self.assertIn('LLM_OWNED=""   # 非自家启动, 退出时不杀', self.source)
 
-    def test_kvmem_reads_real_pid_after_ready(self):
-        # P0 修复锁定：kvmem 包装进程自检后退出, 就绪后必须回读端口真实 pid
-        self.assertIn("LLM_PID=$(port_pids | head -n1)", self.source)
+    def test_stop_kills_by_port_read_windows_pid(self):
+        # $! 是 MSYS 伪 pid, taskkill 不认 —— 必须按端口回读真实 Windows pid 再树杀
+        self.assertIn('srv=$(port_pid)', self.source)
+        self.assertIn('taskkill //PID "$srv" //T //F', self.source)
+        self.assertNotIn('LLM_PID', self.source)
 
-    def test_foreign_port_conflict_refuses_to_start(self):
-        # 互斥端口被占 → 拒绝启动报错，绝不替用户杀进程
+    def test_stop_uses_taskkill_tree_kill(self):
+        # server.py 被硬杀无优雅卸载路径, 必须 //T 树杀 engine 子进程, 否则显存残留
+        self.assertIn("taskkill //PID", self.source)
+        self.assertIn("//T //F", self.source)
+
+    def test_stop_verifies_vram_released(self):
+        # 树杀后核对显存回落, engine 残留要告警
+        self.assertIn("GPU 仍占用", self.source)
+
+    def test_foreign_gpu_conflict_refuses_to_start(self):
+        # 互斥: GPU 被其它负载占用 → 拒绝启动报错，绝不替用户杀
         self.assertIn("16G 显存互斥", self.source)
-        # 互斥检查匹配任意绑定地址（0.0.0.0 旧栈不能漏检）
-        self.assertIn('":(8888|8899|18200|18201) "', self.source)
 
     def test_occupied_port_without_health_fails_closed(self):
         # 端口被占但健康未过 → 报错退出（可能是用户正在手动启动）, 不代杀
@@ -60,6 +72,11 @@ class TestRunAllLlmLifecycle(unittest.TestCase):
         # 用完必关的契约不变（仅针对自家启动实例）
         self.assertIn("stop_llm_server", self.source)
         self.assertIn("trap", self.source)
+
+    def test_windows_venv_layout(self):
+        # Windows venv 布局: .venv/Scripts/python.exe（WSL 时代 .venv/bin/python3 退役）
+        self.assertIn(".venv/Scripts/python.exe", self.source)
+        self.assertNotIn(".venv/bin/python3", self.source)
 
 
 if __name__ == "__main__":

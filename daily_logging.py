@@ -55,7 +55,7 @@ def setup_logging(
 
     if log_file is None:
         log_file = str(
-            Path(os.environ.get("DAILY_OUTPUT_DIR", "/mnt/e/每日新中国"))
+            Path(os.environ.get("DAILY_OUTPUT_DIR", "E:/每日新中国"))
             / "logs"
             / "daily.log"
         )

@@ -14,7 +14,7 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-BASE_DIR = Path("/mnt/e/每日新中国")
+BASE_DIR = Path("E:/每日新中国")
 ARCHIVE_DIR = BASE_DIR / "archive"
 ARTICLES_DIR = ARCHIVE_DIR / "articles"
 IMAGES_DIR = ARCHIVE_DIR / "images"

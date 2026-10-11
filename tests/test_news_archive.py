@@ -37,7 +37,7 @@ class TestNewsArchive(unittest.TestCase):
 
     def test_month_path(self):
         p = month_path("2026-06-15")
-        self.assertTrue(str(p).endswith("archive/articles/2026-06.jsonl"))
+        self.assertTrue(p.as_posix().endswith("archive/articles/2026-06.jsonl"))
 
     def test_infer_source_xinhua(self):
         self.assertEqual(infer_source("https://news.cn/2026/test", {}), "新华社")
