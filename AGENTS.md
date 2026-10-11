@@ -6,28 +6,30 @@
 
 ## 运行命令
 
+Windows 原生（Git Bash），首次准备：`py -3 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+
 ```bash
-# 完整管道（默认今天）
+# 完整管道（默认今天；run_all.sh 自动启停 Strata LLM 服务）
 ./run_all.sh
 ./run_all.sh --date 2026-06-24
 ./run_all.sh --dry-run --date 2026-06-24
 
-# 单步执行
-python3 step1_3.py --date 2026-06-24
-python3 step4.py --date 2026-06-24
-python3 step6.py --date 2026-06-24
-python3 step7.py --date 2026-06-24
-python3 step8.py --date 2026-06-24
+# 单步执行（用项目 venv）
+.venv/Scripts/python.exe step1_3.py --date 2026-06-24
+.venv/Scripts/python.exe step4.py --date 2026-06-24
+.venv/Scripts/python.exe step6.py --date 2026-06-24
+.venv/Scripts/python.exe step7.py --date 2026-06-24
+.venv/Scripts/python.exe step8.py --date 2026-06-24
 
 # 测试（stdlib unittest）
-python3 -m unittest discover -s tests
+.venv/Scripts/python.exe -m unittest discover -s tests
 ```
 
 无 CI/CD。
 
 ## 管道架构
 
-5 个 Python 脚本顺序执行，数据通过文件接力（Markdown），输出到 `/mnt/e/每日新中国/{YYYY-MM-DD}/`：
+5 个 Python 脚本顺序执行，数据通过文件接力（Markdown），输出到 `E:\每日新中国\{YYYY-MM-DD}\`：
 
 ```
 step1_3.py  (采集+校验)  ->  0新闻_粗筛.md
@@ -64,8 +66,8 @@ step8.py    (渲染成报)   ->  HTML + PNG
 - **唯一配置**：`llm.yaml` - 改一行即可切换 provider/model
 - **抽象层**：`llm_client.py` - `get_client(call_site_id)` 返回 (OpenAI 实例, model, kwargs)；`call_llm(call_site_id, messages)` 一站式调用
 - **切换 provider**：改 `llm.yaml` 顶层 `provider: <name>` + `model: <string>` 即可，不用改代码
-- **本地后端**：`kvmem`（KVMem rc1 + IQ2_S @ 27182，`bash start-llm.sh kvmem` 启动，见 ADR-0004）；回滚旧栈 = provider 一行改回 `qwen-local` + `bash start-llm.sh`（8899）。两后端与视频侧 8888/18200/18201 显存互斥
-- **环境变量**：`.env` 中 `LLAMA_API_KEY`（本地 Qwen3.8-27B）+ `ZHIPU_API_KEY` / `MINIMAX_API_KEY`（应急备用）
+- **本地后端**：`strata`（Strata 引擎 + Qwen3.8-Flash-Next IQ3_S @ 8080，Windows 原生，`bash start-llm.sh` 启动含自检，见 ADR-0005）。引擎默认开思维链、小 max_tokens 会拿空 content，`reasoning: "off"` 键不可去；加载后显存 ~15.7/16GB，与一切 GPU 负载互斥（run_all.sh/start-llm.sh 用 nvidia-smi 阈值把关）。27B 旧栈（kvmem 27182 / qwen-local 8899）随模型文件删除退役，见 ADR-0004
+- **环境变量**：`.env` 中 `STRATA_API_KEY`（本地 Strata，值不校验）+ `ZHIPU_API_KEY` / `MINIMAX_API_KEY`（应急备用）
 
 ### 调用点总览
 
@@ -137,6 +139,6 @@ Single-context - one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agen
 ## 已知问题
 
 - `balance_columns()` 是 O(2^n) 暴力枚举，n≤8 够用
-- 无 pip `requirements.txt`，依赖为 `openai` `aiohttp` `Pillow` `python-dotenv`
-- 依赖外部 `/snap/bin/chromium`
+- 依赖外部 Chrome（`daily/http.py:CHROMIUM` 单点硬编码，缺装则采集降级/渲染失败）
 - `step1_3.py` 无重试和缓存（cnnc 三级回退除外）
+- `daily_china_news_full_to_feishu.py`（飞书/视频投递编排）仍绑定原 WSL 环境（~/projects/Daily + ~/.hermes 视频技能），未随 ADR-0005 迁移

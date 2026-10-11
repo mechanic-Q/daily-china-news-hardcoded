@@ -23,19 +23,16 @@ call_sites:
     max_tokens: 1200
     temperature: 0.7
     timeout: 30
-model: qwen3.8
-provider: kvmem
+model: qwen3.8-flash-next-iq3_s
+provider: strata
 providers:
-  qwen-local:
-    api_key_env: LLAMA_API_KEY
-    base_url: http://localhost:8899/v1
-    max_output_tokens: 16384
-    reasoning: "off"
-  # KVMem rc1 + IQ2_S @ 冷门端口 27182（bash start-llm.sh kvmem 启动；与 8888/8899/18200/18201 显存互斥）
-  # 思维链双保险: 服务端 --no-think + 客户端 reasoning_effort=none（rc1 实测接受该字段, 冒烟 2026-09-24）
-  kvmem:
-    api_key_env: LLAMA_API_KEY
-    base_url: http://127.0.0.1:27182/v1
+  # Strata 引擎 + Qwen3.8-Flash-Next IQ3_S @ 8080（Windows 原生; bash start-llm.sh 启动, 见 ADR-0005）
+  # 思维链: 引擎默认开 CoT, 客户端 reasoning_effort=none 实测有效关闭（2026-10-12 冒烟, HTTP 200 + 无
+  #   reasoning_content）。此键不可去 —— 默认 CoT 下小 max_tokens 会被思维链吃满预算致 content=null
+  #   （max_tokens=32 实测 null）。速度参照 76-136 tok/s; 加载后显存 15.7/16.3GB, 与一切 GPU 负载互斥
+  strata:
+    api_key_env: STRATA_API_KEY
+    base_url: http://127.0.0.1:8080/v1
     max_output_tokens: 16384
     reasoning: "off"
   minimax:

@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-BASE_DIR = Path("/mnt/e/每日新中国")
+BASE_DIR = Path("E:/每日新中国")
 
 
 def parse_args():

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Tuple
 
 
-BASE_DIR: Path = Path(os.environ.get("DAILY_OUTPUT_DIR", "/mnt/e/每日新中国"))
+BASE_DIR: Path = Path(os.environ.get("DAILY_OUTPUT_DIR", "E:/每日新中国"))
 
 CST: timezone = timezone(timedelta(hours=8))
 

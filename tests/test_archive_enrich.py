@@ -142,7 +142,7 @@ class TestImageHelpers(unittest.TestCase):
 
     def test_image_path_for(self):
         p = image_path_for("2026-06-29", "abc123", ".jpg")
-        self.assertTrue(str(p).endswith("archive/images/2026-06/abc123.jpg"))
+        self.assertTrue(p.as_posix().endswith("archive/images/2026-06/abc123.jpg"))
 
     def test_download_image_dry_run(self):
         status, err, fpath = download_image("https://x.com/a.jpg", Path("/tmp/x.jpg"), dry_run=True)

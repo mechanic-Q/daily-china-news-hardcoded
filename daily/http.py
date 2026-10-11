@@ -6,7 +6,9 @@ import subprocess
 import urllib.request
 
 
-CHROMIUM: str = "/snap/bin/chromium"
+# Windows 本机 Chrome（chromium 同内核, --headless/--dump-dom/--screenshot 通吃）。
+# 2026-10-12 管道 Windows 原生化, WSL /snap/bin/chromium 退役（ADR-0005）
+CHROMIUM: str = "C:/Program Files/Google/Chrome/Application/chrome.exe"
 
 ssl_ctx: ssl.SSLContext = ssl.create_default_context()
 ssl_ctx.check_hostname = False
