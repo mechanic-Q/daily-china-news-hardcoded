@@ -101,8 +101,11 @@ port_pid() {
 }
 
 # GPU 显存占用 MiB (含 WSL 侧 CUDA 负载; 空闲基线 ~600MB)
+# hang-proof: 强杀 15.7GB 显存进程后, 驱动释放窗口内 nvidia-smi 可能卡死/报错
+# (2026-10-13 曾把管道拖死在 step7→step8 之间); 查询仅作诊断, 限时不许失败
 vram_used_mb() {
-    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' \r'
+    (timeout -k 2 15 nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null || true) \
+        | head -1 | tr -d ' \r'
 }
 
 start_llm_server() {
@@ -164,16 +167,16 @@ stop_llm_server() {
     srv=$(port_pid)
     if [[ -n "$srv" ]]; then
         echo "  [LLM] 停止自家实例 (pid=$srv, 树杀)..."
-        taskkill //PID "$srv" //T //F >/dev/null 2>&1 || true
+        timeout -k 2 30 taskkill //PID "$srv" //T //F >/dev/null 2>&1 || true
     else
         echo "  [LLM] 停止自家实例 (端口上无监听, 实例可能仍在加载)..."
     fi
     sleep 2
     used=$(vram_used_mb)
     if [[ "${used:-0}" -gt 2000 ]]; then
-        for orphan in $(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null | tr -d '\r' | awk -F', ' '$2 ~ /strata.exe/ {print $1}'); do
+        for orphan in $((timeout -k 2 15 nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null || true) | tr -d '\r' | awk -F', ' '$2 ~ /strata.exe/ {print $1}'); do
             echo "  [LLM] 清杀脱离进程树的 engine: pid=$orphan"
-            taskkill //PID "$orphan" //F >/dev/null 2>&1 || true
+            timeout -k 2 15 taskkill //PID "$orphan" //F >/dev/null 2>&1 || true
         done
         sleep 3
         used=$(vram_used_mb)

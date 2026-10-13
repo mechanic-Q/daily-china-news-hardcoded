@@ -352,14 +352,20 @@ def build_html(target_date, sections, left_sections, right_sections):
 </html>"""
 
 
+# build_html 里 html/body 的 background —— 改页面样式需同步这里
+BODY_BG = (0xDD, 0xD5, 0xC9)
+
+
 def crop_bottom_whitespace(png_path):
     if Image is None or ImageChops is None:
         return False, "Pillow unavailable"
     try:
         img = Image.open(png_path).convert("RGB")
-        bg = Image.new("RGB", img.size, img.getpixel((0, img.height - 1)))
-        diff = ImageChops.difference(img, bg)
-        bbox = diff.getbbox()
+        # 背景色是自家 HTML 的已知常量, 按容差比对全图找内容包围盒。
+        # 旧实现采样左下角单像素当背景色: 该像素被任何 1px 渲染毛边污染时,
+        # 裁剪随机失效(输出整图 4320x20000, 见 10-11/10-13)或过裁(10-12 的 392px 条)。
+        diff = ImageChops.difference(img, Image.new("RGB", img.size, BODY_BG))
+        bbox = diff.point(lambda p: 255 if p > 6 else 0).getbbox()
         if not bbox:
             return False, "image is empty"
         left, top, right, bottom = bbox
@@ -384,7 +390,7 @@ def screenshot_and_crop(html_path, png_path):
         print(f"  ⚠ chromium not found at {CHROMIUM}")
         return False
 
-    cmd = [
+    base_cmd = [
         chromium,
         "--headless=new", "--disable-gpu", "--hide-scrollbars",
         "--force-device-scale-factor=2",
@@ -392,23 +398,41 @@ def screenshot_and_crop(html_path, png_path):
         f"--screenshot={str(png_path.resolve())}",
         file_url,
     ]
+    # 尝试1 带 virtual-time-budget (等渲染/字体就绪, 防半渲染截图);
+    # 尝试2 不带 —— 该 flag 偶发让 chrome 写完文件后不退出 (2026-10-13 15:52 实测
+    # 撞 120s 超时: 文件已落盘, 裁剪却被跳过, 输出 4320x20000 整图)。
+    attempts = [base_cmd + ["--virtual-time-budget=10000"], base_cmd]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if proc.returncode == 0 and png_path.exists():
-            cropped_ok, crop_msg = crop_bottom_whitespace(png_path)
-            if cropped_ok:
-                print(f"  ✅ 截图已裁白边: {crop_msg}")
-            else:
-                print(f"  ℹ️  截图未裁白边: {crop_msg}")
-            return True
-        print(f"  ⚠ 截图失败: {(proc.stderr or proc.stdout or 'unknown error').strip()[:200]}")
+        png_path.unlink()   # 防上一轮残留文件被误当本轮产物
+    except FileNotFoundError:
+        pass
+    proc, timed_out = None, False
+    for i, cmd in enumerate(attempts, 1):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            proc, timed_out = None, True
+        if png_path.exists():
+            if timed_out:
+                print("  ℹ chromium 120s 未退出, 但截图文件已写出, 继续裁剪")
+            elif proc.returncode != 0:
+                err = (proc.stderr or proc.stdout or "").strip()[:200]
+                print(f"  ℹ chromium 退出码 {proc.returncode}, 截图已生成{'; ' + err if err else ''}")
+            break
+        print(f"  ⚠ 截图第 {i} 次未生成" + ("，重试..." if i < len(attempts) else ""))
+    else:
+        print("  ⚠ 截图失败: 两次尝试均未产出文件")
         return False
-    except subprocess.TimeoutExpired:
-        print("  ⚠ 截图超时 (120s)")
-        return False
-    except Exception as e:
-        print(f"  ⚠ 截图异常: {e}")
-        return False
+
+    cropped_ok, crop_msg = crop_bottom_whitespace(png_path)
+    if cropped_ok:
+        print(f"  ✅ 截图已裁白边: {crop_msg}")
+        _, cropped_h = Image.open(png_path).size
+        if cropped_h < 1200:
+            print(f"  ⚠ 裁剪后高度 {cropped_h}px 异常偏小, 截图可能不完整 (HTML 可用)")
+    else:
+        print(f"  ℹ️  截图未裁白边: {crop_msg}")
+    return True
 
 
 def run(today, dry_run):
