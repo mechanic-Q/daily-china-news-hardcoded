@@ -6,12 +6,20 @@
 
 ## 运行命令
 
-Windows 原生（Git Bash），首次准备：`py -3 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+Windows 原生（逻辑单一真源 = `run_all.sh`，须 Git 的 **MSYS bash** 执行；仓库文件在 WSL ext4，Windows 侧经 `\\wsl.localhost\Ubuntu\home\lmr\projects\Daily` 访问）。首次准备：`py -3 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+
+```powershell
+# 推荐入口（无人值守/定时任务一律走这里）：run_all.ps1 自动甄别 Git 的 MSYS bash，
+# 显式排除 System32 的 WSL bash。WSL bash 入口已随 Windows 原生化（2026-10-12）退役：
+# venv/Chrome/LLM 全在 Windows 侧，WSL bash 下路径与工具语义均不成立，勿再改回
+# `wsl -e bash` 调用（2026-10-13 9:00 定时任务即因此未产出，当日刊为 15:49 手动补跑）
+powershell -NoProfile -ExecutionPolicy Bypass -File "\\wsl.localhost\Ubuntu\home\lmr\projects\Daily\run_all.ps1" --date 2026-10-14
+```
 
 ```bash
-# 完整管道（默认今天；run_all.sh 自动启停 Strata LLM 服务）
-./run_all.sh
-./run_all.sh --date 2026-06-24
+# 等价入口：已在本机 Git Bash 时直接
+cd //wsl.localhost/Ubuntu/home/lmr/projects/Daily && ./run_all.sh
+# 完整管道（默认今天；run_all.sh 自动启停 Strata LLM 服务）；--dry-run 干跑
 ./run_all.sh --dry-run --date 2026-06-24
 
 # 单步执行（用项目 venv）
@@ -25,7 +33,7 @@ Windows 原生（Git Bash），首次准备：`py -3 -m venv .venv && .venv/Scri
 .venv/Scripts/python.exe -m unittest discover -s tests
 ```
 
-无 CI/CD。
+CI：GitHub Actions（.github/workflows/test.yml，Python 3.12 单测；main 有分支保护，docs 改动也走 PR，required check 过后 admin merge）。
 
 ## 管道架构
 
@@ -38,6 +46,8 @@ step6.py    (正文提取)   ->  2新闻_已审核.md
 step7.py    (摘要生成)   ->  3新闻_概述.md    ← LLM × 1
 step8.py    (渲染成报)   ->  HTML + PNG
 ```
+
+> **下游契约**：`3新闻_概述.md`（含当日报纸 PNG）是 video-pipeline（B站读报视频）直接读报模式的每日输入，9:15 定时任务自动消费。人工改写仅限摘要质量闸门修复路径（改写后重跑 `python3 step8.py --date <日期>`），其余情况不要手改产物。
 
 关键设计决策：
 - 步骤间无内存共享，纯文件接口，可独立运行
@@ -147,5 +157,5 @@ Single-context - one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agen
 
 - `balance_columns()` 是 O(2^n) 暴力枚举，n≤8 够用
 - 依赖外部 Chrome（`daily/http.py:CHROMIUM` 单点硬编码，缺装则采集降级/渲染失败）
-- `step1_3.py` 无重试和缓存（cnnc 三级回退除外）
+- `step1_3.py` 抓取有 tenacity 重试（3 次指数退避+抖动），无磁盘缓存（cnnc 三级回退除外）
 - `daily_china_news_full_to_feishu.py`（飞书/视频投递编排）：飞书凭据已迁 Windows 侧 ~/.hermes/.env（2026-10-13，发送链路已验证）；管道调用与视频构建仍绑定 WSL（~/projects/Daily + ~/.hermes 视频技能 + ffmpeg）
