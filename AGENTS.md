@@ -122,6 +122,13 @@ git checkout -b phase-{NN}-{name}
 
 这确保即使忘记手动建分支，workflow 也能自动补救。
 
+## 提交与文档流（2026-10-13 起）
+
+- **docs 直推 main**：AGENTS.md、docs/、ADR 等纯文档改动直接 commit 到 main，不建分支不走 PR
+- **实现票走 feat+PR**：实现类改动建 feat 分支 → PR → merge，PR 正文用**中文详记踩坑**
+- **README 只在里程碑动**：平时不动 README
+- **graphify 开工先查一把**：实现票开工先跑 `node .opencode/get-shit-done/bin/gsd-tools.cjs graphify status` 查能力图谱（当前 disabled；启用：`gsd-tools config-set graphify.enabled true`）
+
 ## Agent skills
 
 ### Issue tracker
@@ -141,4 +148,4 @@ Single-context - one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agen
 - `balance_columns()` 是 O(2^n) 暴力枚举，n≤8 够用
 - 依赖外部 Chrome（`daily/http.py:CHROMIUM` 单点硬编码，缺装则采集降级/渲染失败）
 - `step1_3.py` 无重试和缓存（cnnc 三级回退除外）
-- `daily_china_news_full_to_feishu.py`（飞书/视频投递编排）仍绑定原 WSL 环境（~/projects/Daily + ~/.hermes 视频技能），未随 ADR-0005 迁移
+- `daily_china_news_full_to_feishu.py`（飞书/视频投递编排）：飞书凭据已迁 Windows 侧 ~/.hermes/.env（2026-10-13，发送链路已验证）；管道调用与视频构建仍绑定 WSL（~/projects/Daily + ~/.hermes 视频技能 + ffmpeg）
