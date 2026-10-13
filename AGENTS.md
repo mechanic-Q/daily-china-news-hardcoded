@@ -33,7 +33,7 @@ cd //wsl.localhost/Ubuntu/home/lmr/projects/Daily && ./run_all.sh
 .venv/Scripts/python.exe -m unittest discover -s tests
 ```
 
-无 CI/CD。
+CI：GitHub Actions（.github/workflows/test.yml，Python 3.12 单测；main 有分支保护，docs 改动也走 PR，required check 过后 admin merge）。
 
 ## 管道架构
 
