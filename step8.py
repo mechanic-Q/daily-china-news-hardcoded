@@ -383,6 +383,45 @@ def crop_bottom_whitespace(png_path):
         return False, str(exc)
 
 
+# 截图窗口与缩放：整窗高度 = 这些值相乘。裁剪后若高度仍等于整窗高度，
+# 说明内容包围盒就是整图（裁剪失效），不能当成合格产物（10-02/10-06/10-11/10-19 实录）。
+SCREENSHOT_WIDTH = 2160
+SCREENSHOT_HEIGHT = 10000
+SCREENSHOT_SCALE = 2
+# chromium 进程退出与文件落盘不是原子的：进程先退出、--screenshot 的结果
+# 随后才写完（10-19 实录：进程 0.5s 内返回，文件 4s 后才落盘）。退出后必须
+# 轮询等待文件真正稳定，否则会把「还在写」误判成「没生成」。
+SCREENSHOT_WAIT_SECONDS = 30.0
+SCREENSHOT_SETTLE_SECONDS = 0.3
+
+
+def _wait_for_screenshot(png_path, deadline):
+    """等 --screenshot 落盘并写稳。返回 True 表示拿到了稳定的非空文件。
+
+    chromium 退出码并不代表截图成功，文件存在也不代表写完，所以判据只能是
+    「文件存在 + 大小 > 0 + 大小在 SETTLE 窗口内不再变化」。
+    """
+    last_size = -1
+    stable_since = None
+    while time.time() < deadline:
+        try:
+            size = png_path.stat().st_size
+        except FileNotFoundError:
+            last_size, stable_since = -1, None
+            time.sleep(0.1)
+            continue
+        if size > 0 and size == last_size:
+            if stable_since is None:
+                stable_since = time.time()
+            elif time.time() - stable_since >= SCREENSHOT_SETTLE_SECONDS:
+                return True
+        else:
+            stable_since = None
+        last_size = size
+        time.sleep(0.1)
+    return False
+
+
 def screenshot_and_crop(html_path, png_path):
     file_url = html_path.resolve().as_uri()
     chromium = CHROMIUM
@@ -393,8 +432,8 @@ def screenshot_and_crop(html_path, png_path):
     base_cmd = [
         chromium,
         "--headless=new", "--disable-gpu", "--hide-scrollbars",
-        "--force-device-scale-factor=2",
-        f"--window-size=2160,10000",
+        f"--force-device-scale-factor={SCREENSHOT_SCALE}",
+        f"--window-size={SCREENSHOT_WIDTH},{SCREENSHOT_HEIGHT}",
         f"--screenshot={str(png_path.resolve())}",
         file_url,
     ]
@@ -408,30 +447,48 @@ def screenshot_and_crop(html_path, png_path):
         pass
     proc, timed_out = None, False
     for i, cmd in enumerate(attempts, 1):
+        started = time.time()
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         except subprocess.TimeoutExpired:
             proc, timed_out = None, True
-        if png_path.exists():
+        # 退出 ≠ 落盘：等文件写稳再判断，别把「还在写」当成「没生成」
+        if _wait_for_screenshot(png_path, time.time() + SCREENSHOT_WAIT_SECONDS):
             if timed_out:
                 print("  ℹ chromium 120s 未退出, 但截图文件已写出, 继续裁剪")
-            elif proc.returncode != 0:
+            elif proc is not None and proc.returncode != 0:
                 err = (proc.stderr or proc.stdout or "").strip()[:200]
                 print(f"  ℹ chromium 退出码 {proc.returncode}, 截图已生成{'; ' + err if err else ''}")
             break
-        print(f"  ⚠ 截图第 {i} 次未生成" + ("，重试..." if i < len(attempts) else ""))
+        waited = time.time() - started
+        print(f"  ⚠ 截图第 {i} 次未生成 (等待 {waited:.1f}s)" + ("，重试..." if i < len(attempts) else ""))
     else:
         print("  ⚠ 截图失败: 两次尝试均未产出文件")
         return False
 
     cropped_ok, crop_msg = crop_bottom_whitespace(png_path)
-    if cropped_ok:
-        print(f"  ✅ 截图已裁白边: {crop_msg}")
-        _, cropped_h = Image.open(png_path).size
-        if cropped_h < 1200:
-            print(f"  ⚠ 裁剪后高度 {cropped_h}px 异常偏小, 截图可能不完整 (HTML 可用)")
-    else:
-        print(f"  ℹ️  截图未裁白边: {crop_msg}")
+    if not cropped_ok:
+        print(f"  ⚠ 截图失败: 裁剪未生效 ({crop_msg})，不产出未裁剪图")
+        try:
+            png_path.unlink()
+        except FileNotFoundError:
+            pass
+        return False
+
+    print(f"  ✅ 截图已裁白边: {crop_msg}")
+    with Image.open(png_path) as _im:
+        width, cropped_h = _im.size
+    full_h = SCREENSHOT_HEIGHT * SCREENSHOT_SCALE
+    if cropped_h >= full_h:
+        # 包围盒 = 整图 → 裁剪形同虚设，产物是一张 4320x20000 的整窗图
+        print(f"  ⚠ 截图失败: 裁剪后仍是整窗高度 {width}x{cropped_h}，裁剪未生效")
+        try:
+            png_path.unlink()
+        except FileNotFoundError:
+            pass
+        return False
+    if cropped_h < 1200:
+        print(f"  ⚠ 裁剪后高度 {cropped_h}px 异常偏小, 截图可能不完整 (HTML 可用)")
     return True
 
 
