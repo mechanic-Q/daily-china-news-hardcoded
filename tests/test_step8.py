@@ -62,13 +62,23 @@ class TestScreenshotLateWrite(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    def _run_with_fake(self, fake, wait_seconds):
+        """把 CHROMIUM 指向一个真实存在的文件，保证在 CI(Linux) 上也能进到 subprocess.run。
+
+        不这么钉的话，screenshot_and_crop 会在 "chromium not found" 处提前 return False，
+        下面的断言虽然「通过」，实际一次也没跑到被测逻辑（假绿）。
+        """
+        with mock.patch.object(step8, "CHROMIUM", sys.executable), \
+             mock.patch.object(step8.subprocess, "run", fake), \
+             mock.patch.object(step8, "SCREENSHOT_WAIT_SECONDS", wait_seconds):
+            return step8.screenshot_and_crop(self.html, self.png)
+
     def test_waits_for_file_written_after_process_exit(self):
         """文件在进程退出后 1s 才落盘：必须等待并裁剪，不得判失败。"""
         fake = LateWriteChrome(delay=1.0)
-        with mock.patch.object(step8.subprocess, "run", fake), \
-             mock.patch.object(step8, "SCREENSHOT_WAIT_SECONDS", 10.0, create=True):
-            ok = step8.screenshot_and_crop(self.html, self.png)
+        ok = self._run_with_fake(fake, wait_seconds=10.0)
 
+        self.assertGreater(fake.calls, 0, "chrome 必须真的被调用，否则断言是空转")
         self.assertTrue(ok, "chromium 退出后文件才落盘，应等待落盘而不是判「截图未生成」")
         self.assertTrue(self.png.exists(), "产物必须留在目标路径")
         self.assertEqual(fake.calls, 1, "首次尝试等到文件后不应再重试")
@@ -83,26 +93,28 @@ class TestScreenshotLateWrite(unittest.TestCase):
     def test_failure_leaves_no_bogus_artifact(self):
         """chromium 始终不产文件：返回 False，且产物路径不得留下半成品。"""
         fake = LateWriteChrome(write=False)
-        with mock.patch.object(step8.subprocess, "run", fake), \
-             mock.patch.object(step8, "SCREENSHOT_WAIT_SECONDS", 0.4, create=True):
-            ok = step8.screenshot_and_crop(self.html, self.png)
+        ok = self._run_with_fake(fake, wait_seconds=0.4)
 
+        self.assertGreaterEqual(fake.calls, 2, "两次尝试都应真的跑过，否则断言是空转")
         self.assertFalse(ok)
         self.assertFalse(self.png.exists(), "失败时不能把未裁剪/半成品留在下游会读的路径上")
 
     def test_uncropped_full_window_is_flagged(self):
         """裁剪没生效（图仍是整窗高度）时不得静默当成成功产物。"""
         raw_h = step8.SCREENSHOT_HEIGHT * step8.SCREENSHOT_SCALE
+        calls = []
 
         def fake_run(cmd, *a, **kw):
+            calls.append(1)
             target = Path([c for c in cmd if c.startswith("--screenshot=")][0].split("=", 1)[1])
             from PIL import Image
             Image.new("RGB", (80, raw_h), step8.BODY_BG).save(target)
             return _FakeCompleted()
 
-        with mock.patch.object(step8.subprocess, "run", fake_run):
-            ok = step8.screenshot_and_crop(self.html, self.png)
+        ok = self._run_with_fake(fake_run, wait_seconds=10.0)
+        self.assertGreater(len(calls), 0, "chrome 必须真的被调用，否则断言是空转")
         self.assertFalse(ok, "整窗高度说明内容包围盒就是整图，裁剪失效，不能报成功")
+        self.assertFalse(self.png.exists(), "未裁剪的整窗图不得留在下游会读的路径上")
 
 
 if __name__ == "__main__":
