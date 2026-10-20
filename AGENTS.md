@@ -6,19 +6,19 @@
 
 ## 运行命令
 
-Windows 原生（逻辑单一真源 = `run_all.sh`，须 Git 的 **MSYS bash** 执行；仓库文件在 WSL ext4，Windows 侧经 `\\wsl.localhost\Ubuntu\home\lmr\projects\Daily` 访问）。首次准备：`py -3 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+Windows 原生（逻辑单一真源 = `run_all.sh`，须 Git 的 **MSYS bash** 执行；本机检出在 `E:\Daily\daily-china-news-hardcoded`，WSL 那份 `\\wsl.localhost\Ubuntu\home\lmr\projects\Daily` 已废弃、停在 #67）。首次准备：`py -3 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
 
 ```powershell
 # 推荐入口（无人值守/定时任务一律走这里）：run_all.ps1 自动甄别 Git 的 MSYS bash，
 # 显式排除 System32 的 WSL bash。WSL bash 入口已随 Windows 原生化（2026-10-12）退役：
 # venv/Chrome/LLM 全在 Windows 侧，WSL bash 下路径与工具语义均不成立，勿再改回
 # `wsl -e bash` 调用（2026-10-13 9:00 定时任务即因此未产出，当日刊为 15:49 手动补跑）
-powershell -NoProfile -ExecutionPolicy Bypass -File "\\wsl.localhost\Ubuntu\home\lmr\projects\Daily\run_all.ps1" --date 2026-10-14
+powershell -NoProfile -ExecutionPolicy Bypass -File "E:\Daily\daily-china-news-hardcoded\run_all.ps1" --date 2026-10-14
 ```
 
 ```bash
 # 等价入口：已在本机 Git Bash 时直接
-cd //wsl.localhost/Ubuntu/home/lmr/projects/Daily && ./run_all.sh
+cd /e/Daily/daily-china-news-hardcoded && ./run_all.sh
 # 完整管道（默认今天；run_all.sh 自动启停 Strata LLM 服务）；--dry-run 干跑
 ./run_all.sh --dry-run --date 2026-06-24
 
@@ -29,8 +29,8 @@ cd //wsl.localhost/Ubuntu/home/lmr/projects/Daily && ./run_all.sh
 .venv/Scripts/python.exe step7.py --date 2026-06-24
 .venv/Scripts/python.exe step8.py --date 2026-06-24
 
-# 测试（stdlib unittest）
-.venv/Scripts/python.exe -m unittest discover -s tests
+# 测试（stdlib unittest；本机 venv 未装 pytest，不要用 pytest）
+.venv/Scripts/python.exe -m unittest discover -s tests   # 292 tests OK
 ```
 
 CI：GitHub Actions（.github/workflows/test.yml，Python 3.12 单测；main 有分支保护，docs 改动也走 PR，required check 过后 admin merge）。
@@ -41,7 +41,7 @@ CI：GitHub Actions（.github/workflows/test.yml，Python 3.12 单测；main 有
 
 ```
 step1_3.py  (采集+校验)  ->  0新闻_粗筛.md
-step4.py    (分类+过滤)  ->  1新闻_链接.md    ← LLM × 2
+step4.py    (分类+过滤)  ->  1新闻_链接.md    ← LLM × 4
 step6.py    (正文提取)   ->  2新闻_已审核.md
 step7.py    (摘要生成)   ->  3新闻_概述.md    ← LLM × 1
 step8.py    (渲染成报)   ->  HTML + PNG
@@ -85,9 +85,9 @@ step8.py    (渲染成报)   ->  HTML + PNG
 
 | call_site_id | 位置 | 用途 |
 |---|---|---|
-| `china-relevance` | `step4.py:llm_is_china_related()` | 涉华判定兜底 |
-| `column-classify` | `step4.py:llm_classify_single()` | 8 栏目分类仲裁 |
-| `column-score` | `step4.py:score_signals()` | 栏目新闻价值评分 |
+| `china-relevance` | `step4.py:llm_is_china_related_batch()` | 涉华判定兜底 |
+| `column-classify` | `step4.py:llm_classify_single()` | 9 栏目分类仲裁 |
+| `column-score` | `step4.py:score_signals_batch()` | 栏目新闻价值评分 |
 | `event-dedup` | `step4.py:llm_review_duplicate_candidates()` | 跨信源同事件去重 |
 | `summarize` | `step7.py:llm_summarize()` | 新闻摘要生成 |
 | `monthly-overview` | `monthly_report.py` | 月度报告综述 |
@@ -106,7 +106,7 @@ step8.py    (渲染成报)   ->  HTML + PNG
 |------|------|
 | `step1_3.py` | 7 信源异步采集器，HTTP-200 校验 |
 | `step4.py` | 关键词加权评分 + LLM 分类，选前 10 |
-| `step6.py` | 5 层正文提取策略链（TRS_Editor -> article -> class 匹配 -> `<p>` 回退）|
+| `step6.py` | 正文提取（trafilatura 为主 + ckxx JS 字面量回退 + `SITE_POSTPROCESS` 站点清理）|
 | `step7.py` | LLM 摘要生成 + 诊断重试 |
 | `step8.py` | HTML 双栏渲染 + Chromium 截图 + Pillow 裁剪 |
 | `run_all.sh` | 管道编排 |
@@ -134,7 +134,7 @@ git checkout -b phase-{NN}-{name}
 
 ## 提交与文档流（2026-10-13 起）
 
-- **docs 直推 main**：AGENTS.md、docs/、ADR 等纯文档改动直接 commit 到 main，不建分支不走 PR
+- **docs 也要走 PR**（旧口径「直推 main」已失效：main 有 `enforce_admins: true` 分支保护，owner 直推一样被拒）：docs/feat 分支 -> PR -> CI 绿 -> merge，历史 #64/#67/#68 均如此
 - **实现票走 feat+PR**：实现类改动建 feat 分支 → PR → merge，PR 正文用**中文详记踩坑**
 - **README 只在里程碑动**：平时不动 README
 - **graphify 开工先查一把**：实现票开工先跑 `node .opencode/get-shit-done/bin/gsd-tools.cjs graphify status` 查能力图谱（当前 disabled；启用：`gsd-tools config-set graphify.enabled true`）
